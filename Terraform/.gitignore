@@ -1,0 +1,14 @@
+# Chaves privadas e credenciais
+*.pem
+*.key
+labsuser.pem
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+.terraform.lock.hcl
+
+# Zips locais gerados
+*.zip

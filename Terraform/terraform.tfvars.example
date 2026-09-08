@@ -1,0 +1,52 @@
+aws_region   = "us-east-1"
+project_name = "devops-projeto"
+environment  = "prod"
+
+# Zonas de Disponibilidade
+availability_zones = ["us-east-1a", "us-east-1b"]
+
+# Configurações de Rede (VPC 10.0.0.0/16)
+vpc_cidr              = "10.0.0.0/16"
+public_subnet_1_cidr  = "10.0.1.0/24"
+public_subnet_2_cidr  = "10.0.2.0/24"
+private_subnet_1_cidr = "10.0.11.0/24"
+private_subnet_2_cidr = "10.0.12.0/24"
+private_subnet_3_cidr = "10.0.21.0/24"
+private_subnet_4_cidr = "10.0.22.0/24"
+
+# Configuração de Instâncias EC2
+instance_type_frontend = "t3.micro"
+instance_type_backend  = "t3.small"
+instance_type_database = "t3.small"
+instance_type_bastion  = "t3.micro"
+
+# Chave SSH (ex: "vockey" no AWS Academy e arquivo labsuser.pem)
+ssh_key_name         = "vockey"
+ssh_private_key_path = "labsuser.pem"
+
+# IP de administração (Recomenda-se colocar o seu IP público atual: ex: "189.10.20.30/32")
+admin_ssh_cidr = "0.0.0.0/0"
+
+# --- Repositórios Git das Aplicações ---
+backend_repo_url    = "https://github.com/LuminaPI52CCOA/Back-end.git"
+backend_repo_branch = "main"
+frontend_repo_url   = "https://github.com/LuminaPI52CCOA/Front-End.git"
+frontend_repo_branch = "main"
+
+# --- Configurações de Banco de Dados ---
+db_name     = "lumina_db"
+db_user     = "lumina_user"
+db_password = "LuminaSecurePass2026!"
+
+# --- Aplicação e Segurança ---
+jwt_secret      = "minha-chave-secreta-super-segura-e-longa-para-o-jwt-token-lumina"
+jwt_validity    = 86400000
+gemini_api_key  = "SUA_CHAVE_GEMINI_AQUI"
+
+# --- NAT Gateway (Para instâncias privadas acessarem internet/Git/APIs) ---
+enable_nat_gateway = true
+
+# --- IAM Roles (AWS Academy Learner Lab) ---
+lab_role_name             = "LabRole"
+lab_instance_profile_name = "LabInstanceProfile"
+
