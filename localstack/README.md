@@ -46,6 +46,30 @@ Três buckets criados no padrão de camadas de dados:
 | Método | `GET` |
 | Stage | `prod` |
 
+### 4. Route 53
+
+| Item | Valor |
+|------|-------|
+| Zona Hospedada | `lumina.internal` |
+| Registro | `app.lumina.internal` (A → `127.0.0.1`) |
+
+### 5. Amazon EC2 (rede de demonstração)
+
+| Item | Valor |
+|------|-------|
+| VPC | `10.10.0.0/16` |
+| Sub-rede A / B | `10.10.1.0/24` / `10.10.2.0/24` |
+| Security Group | `lumina-demo-sg` (porta 80) |
+| Key Pair | `lumina-demo-key` (salvo em `lumina-demo-key.pem`) |
+| Instância | `t3.micro` (AMI dummy) |
+
+### 6. Amazon SNS / SES
+
+| Item | Valor |
+|------|-------|
+| Tópico SNS | `lumina-alerts` |
+| Identidade SES | `admin@lumina.example.com` (verificada) |
+
 ---
 
 ## Como Executar
@@ -69,6 +93,7 @@ O script:
 2. Aguarda o LocalStack ficar pronto.
 3. Cria os buckets `bronze`/`silver`/`gold`.
 4. Faz o deploy da Lambda `lumina-test` e configura o API Gateway (GET `/lumina`, stage `prod`).
+5. Cria os serviços adicionais: **Route 53** (zona `lumina.internal`), **EC2** (VPC/sub-redes/SG/instância de demonstração) e **SNS/SES** (tópico `lumina-alerts` e identidade).
 
 No fim, exibe a **URL de acesso** e uma linha pronta para copiar:
 

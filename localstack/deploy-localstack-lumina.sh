@@ -124,6 +124,70 @@ aws --endpoint-url="$ENDPOINT" lambda add-permission \
   --source-arn "arn:aws:execute-api:${REGION}:${AWS_ACCOUNT_ID}:${API_ID}/*/GET/${PATH_PART}" \
   > /dev/null || echo "Permissão já existente ou erro ao adicionar (prosseguindo...)"
 
+# ==============================================================================
+# Serviços adicionais de demonstração (S3 e Lambda já cobertos acima)
+# ==============================================================================
+
+echo ""
+echo "=== 11. Route 53 (Zona Hospedada) ==="
+HOSTED_ZONE_ID=$(aws --endpoint-url="$ENDPOINT" route53 create-hosted-zone \
+  --name "lumina.internal" \
+  --caller-reference "lumina-$(date +%s)" \
+  --query 'HostedZone.Id' --output text 2>/dev/null | sed 's|/hostedzone/||') || HOSTED_ZONE_ID=""
+if [ -n "$HOSTED_ZONE_ID" ] && [ "$HOSTED_ZONE_ID" != "None" ]; then
+  echo "Zona hospedada criada: $HOSTED_ZONE_ID"
+  aws --endpoint-url="$ENDPOINT" route53 change-resource-record-sets \
+    --hosted-zone-id "$HOSTED_ZONE_ID" \
+    --change-batch '{"Changes":[{"Action":"CREATE","ResourceRecordSet":{"Name":"app.lumina.internal.","Type":"A","TTL":300,"ResourceRecords":[{"Value":"127.0.0.1"}]}}]}' \
+    > /dev/null
+  echo "Registro A 'app.lumina.internal' criado"
+else
+  echo "Route 53: zona já existe, prosseguindo..."
+fi
+
+echo ""
+echo "=== 12. Amazon EC2 (VPC, Sub-redes, SG e Instância) ==="
+DEMO_VPC_ID=$(aws --endpoint-url="$ENDPOINT" ec2 create-vpc \
+  --cidr-block "10.10.0.0/16" --query 'Vpc.VpcId' --output text)
+echo "VPC demo: $DEMO_VPC_ID"
+
+DEMO_SUBNET_A=$(aws --endpoint-url="$ENDPOINT" ec2 create-subnet \
+  --vpc-id "$DEMO_VPC_ID" --cidr-block "10.10.1.0/24" --availability-zone "us-east-1a" \
+  --query 'Subnet.SubnetId' --output text)
+DEMO_SUBNET_B=$(aws --endpoint-url="$ENDPOINT" ec2 create-subnet \
+  --vpc-id "$DEMO_VPC_ID" --cidr-block "10.10.2.0/24" --availability-zone "us-east-1b" \
+  --query 'Subnet.SubnetId' --output text)
+echo "Subnet A: $DEMO_SUBNET_A"
+echo "Subnet B: $DEMO_SUBNET_B"
+
+DEMO_SG=$(aws --endpoint-url="$ENDPOINT" ec2 create-security-group \
+  --group-name "lumina-demo-sg" --description "Security Group de demonstracao Lumina" \
+  --vpc-id "$DEMO_VPC_ID" --query 'GroupId' --output text)
+aws --endpoint-url="$ENDPOINT" ec2 authorize-security-group-ingress \
+  --group-id "$DEMO_SG" --protocol tcp --port 80 --cidr "0.0.0.0/0" > /dev/null 2>&1
+echo "Security Group: $DEMO_SG"
+
+aws --endpoint-url="$ENDPOINT" ec2 create-key-pair \
+  --key-name "lumina-demo-key" --query 'KeyMaterial' --output text \
+  > "$(dirname "$0")/lumina-demo-key.pem" 2>/dev/null || echo "Key pair 'lumina-demo-key' já existe, prosseguindo..."
+chmod 600 "$(dirname "$0")/lumina-demo-key.pem" 2>/dev/null || true
+
+DEMO_INSTANCE_ID=$(aws --endpoint-url="$ENDPOINT" ec2 run-instances \
+  --image-id "ami-00000000" --instance-type "t3.micro" \
+  --subnet-id "$DEMO_SUBNET_A" --security-group-ids "$DEMO_SG" \
+  --key-name "lumina-demo-key" \
+  --query 'Instances[0].InstanceId' --output text)
+echo "Instância EC2 criada: $DEMO_INSTANCE_ID"
+
+echo ""
+echo "=== 13. Amazon SNS / SES (Notificações e E-mail) ==="
+aws --endpoint-url="$ENDPOINT" sns create-topic \
+  --name "lumina-alerts" \
+  --query 'TopicArn' --output text 2>/dev/null || echo "Tópico SNS 'lumina-alerts' já existe, prosseguindo..."
+aws --endpoint-url="$ENDPOINT" ses verify-email-identity \
+  --email-address "admin@lumina.example.com" > /dev/null 2>&1 || echo "Identidade de e-mail já existente, prosseguindo..."
+echo "Tópico SNS e identidade SES configurados"
+
 echo ""
 echo "=== Testando Lambda invocação direta ==="
 aws --endpoint-url="$ENDPOINT" lambda invoke \
@@ -138,6 +202,10 @@ echo ""
 echo "=== Deploy concluído com sucesso! ==="
 echo "Buckets S3 criados: bronze, silver, gold"
 echo "Lambda: $FUNCTION_NAME"
+echo "API Gateway: lumina-api"
+echo "Route 53: zona 'lumina.internal' (record A app.lumina.internal)"
+echo "EC2: instância '$DEMO_INSTANCE_ID' na VPC '$DEMO_VPC_ID'"
+echo "SNS: tópico 'lumina-alerts' | SES: admin@lumina.example.com"
 echo ""
 echo "URL de acesso via web:"
 echo "  http://localhost:${PORT}/restapis/${API_ID}/${STAGE_NAME}/_user_request_/${PATH_PART}"
@@ -155,3 +223,8 @@ echo "  curl \"http://localhost:${PORT}/restapis/\$API_ID/${STAGE_NAME}/_user_re
 echo ""
 echo "Invoke manual via AWS CLI:"
 echo "  aws --profile localstack --endpoint-url=${ENDPOINT} lambda invoke --function-name ${FUNCTION_NAME} --payload '{}' response.json"
+
+echo ""
+echo ""
+echo "=== Serviços LocalStack em execução (running) ==="
+localstack status services | grep -i "running"
