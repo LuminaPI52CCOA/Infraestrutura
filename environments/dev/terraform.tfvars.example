@@ -1,0 +1,22 @@
+aws_region      = "us-east-1"
+project_name    = "lumina"
+ssh_key_name    = "lumina-deploy-key"
+
+# Database
+db_name         = "Lumina"
+db_user         = "lumina_user"
+db_password     = "LuminaSecurePass2026!"
+
+# Application Secrets
+jwt_secret      = "minha-chave-secreta-super-segura-e-longa-para-o-jwt-token-lumina"
+gemini_api_key  = "SUA_CHAVE_GEMINI_AQUI"
+
+# Repositórios e Branches
+backend_repo_branch  = "feat/lambda-alexa"
+frontend_repo_branch = "feat/lambda-alexa"
+db_repo_branch       = "feat/lambda-alexa"
+
+# Alexa
+alexa_service_email    = "john@doe.com"
+alexa_service_password = "123456"
+alexa_skill_id         = ""

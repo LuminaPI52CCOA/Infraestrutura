@@ -1,0 +1,66 @@
+name: "Terraform Infrastructure Deploy/Destroy"
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Acao Terraform a ser executada"
+        required: true
+        type: choice
+        options:
+          - "apply"
+          - "destroy"
+      environment:
+        description: "Perfil de Ambiente"
+        required: true
+        type: choice
+        options:
+          - "dev"
+          - "prod"
+      aws_access_key_id:
+        description: "AWS Access Key ID (Sessao temporaria do Learner Lab)"
+        required: true
+        type: string
+      aws_secret_access_key:
+        description: "AWS Secret Access Key"
+        required: true
+        type: string
+      aws_session_token:
+        description: "AWS Session Token"
+        required: true
+        type: string
+
+jobs:
+  terraform:
+    name: "Executar Terraform (${{ inputs.action }} em ${{ inputs.environment }})"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do Repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.5"
+
+      - name: Autenticar na AWS (Credenciais Efemeras do Lab)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ inputs.aws_access_key_id }}
+          aws-secret-access-key: ${{ inputs.aws_secret_access_key }}
+          aws-session-token: ${{ inputs.aws_session_token }}
+          aws-region: "us-east-1"
+
+      - name: Terraform Init
+        working-directory: ./environments/${{ inputs.environment }}
+        run: terraform init
+
+      - name: Terraform Apply
+        if: ${{ inputs.action == 'apply' }}
+        working-directory: ./environments/${{ inputs.environment }}
+        run: terraform apply -auto-approve
+
+      - name: Terraform Destroy
+        if: ${{ inputs.action == 'destroy' }}
+        working-directory: ./environments/${{ inputs.environment }}
+        run: terraform destroy -auto-approve

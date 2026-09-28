@@ -1,0 +1,22 @@
+# Local .terraform directories
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# Exclude sensitive tfvars files (keep examples)
+*.tfvars
+!*.tfvars.example
+
+# Exclude zip packages
+*.zip
+
+# PEM keys and credentials
+*.pem
+
+# OS and Editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
