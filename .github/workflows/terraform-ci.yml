@@ -1,0 +1,45 @@
+name: "Terraform CI (Lint, Validate & Security)"
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "environments/**"
+      - "modules/**"
+      - "*.tf"
+      - ".github/workflows/terraform-*.yml"
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "environments/**"
+      - "modules/**"
+      - "*.tf"
+      - ".github/workflows/terraform-*.yml"
+
+jobs:
+  validate:
+    name: "Validar Terraform (Dev & Prod)"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do Repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.5"
+
+      - name: Verificar Formatacao (terraform fmt)
+        run: terraform fmt -check -recursive
+
+      - name: Validar Ambiente Dev
+        working-directory: ./environments/dev
+        run: |
+          terraform init -backend=false
+          terraform validate
+
+      - name: Validar Ambiente Prod
+        working-directory: ./environments/prod
+        run: |
+          terraform init -backend=false
+          terraform validate
