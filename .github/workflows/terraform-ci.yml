@@ -2,14 +2,14 @@ name: "Terraform CI (Lint, Validate & Security)"
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, feat/ci-cd]
     paths:
       - "environments/**"
       - "modules/**"
       - "*.tf"
       - ".github/workflows/terraform-*.yml"
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, feat/ci-cd]
     paths:
       - "environments/**"
       - "modules/**"
@@ -21,8 +21,24 @@ jobs:
     name: "Validar Terraform (Dev & Prod)"
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout do Repositorio
+      - name: Checkout do Repositorio Infraestrutura
         uses: actions/checkout@v4
+
+      - name: Checkout do Modulo Lambda-Alexa
+        uses: actions/checkout@v4
+        with:
+          repository: 'LuminaPI52CCOA/Lambda-Alexa'
+          ref: 'main'
+          path: 'Lambda-Alexa'
+
+      - name: Configurar estrutura de pastas multi-repo
+        run: |
+          mkdir -p ../../../Lambda-Alexa
+          cp -r Lambda-Alexa/* ../../../Lambda-Alexa/ 2>/dev/null || true
+          mkdir -p ../../Lambda-Alexa
+          cp -r Lambda-Alexa/* ../../Lambda-Alexa/ 2>/dev/null || true
+          mkdir -p ../Lambda-Alexa
+          cp -r Lambda-Alexa/* ../Lambda-Alexa/ 2>/dev/null || true
 
       - name: Instalar Terraform
         uses: hashicorp/setup-terraform@v3
