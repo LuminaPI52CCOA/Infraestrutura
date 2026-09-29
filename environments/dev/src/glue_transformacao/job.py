@@ -23,7 +23,7 @@ bucket_silver = args['BUCKET_SILVER']
 # 1. Processamento: Controle Semestral
 print("Processando Controle Semestral...")
 try:
-    df_semestral = spark.read.option("header", "true").option("delimiter", ";").option("encoding", "latin1").csv(f"{bucket_bronze}/sisagua/bruto/controle_semestral/*/*.csv")
+    df_semestral = spark.read.option("header", "true").option("delimiter", ";").option("encoding", "latin1").csv(f"{bucket_bronze}/sisagua/controle_semestral/*/*.csv")
     
     # A 4ª coluna (indice 3) é NO_MUNICIPIO
     col_municipio_sem = df_semestral.columns[3]
@@ -38,7 +38,7 @@ except Exception as e:
 # 2. Processamento: Controle Mensal
 print("Processando Controle Mensal...")
 try:
-    df_mensal = spark.read.option("header", "true").option("delimiter", ";").option("encoding", "latin1").csv(f"{bucket_bronze}/sisagua/bruto/controle_mensal/*/*.csv")
+    df_mensal = spark.read.option("header", "true").option("delimiter", ";").option("encoding", "latin1").csv(f"{bucket_bronze}/sisagua/controle_mensal/*/*.csv")
     
     # A 5ª coluna (indice 4) é Município
     col_municipio_men = df_mensal.columns[4]

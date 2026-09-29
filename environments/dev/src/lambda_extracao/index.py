@@ -36,14 +36,14 @@ def handler(event, context):
     if not bucket_bronze:
         raise ValueError("Variavel de ambiente BUCKET_BRONZE nao configurada.")
         
-    hoje = datetime.now().strftime("%Y%m%d")
+    mes_atual = datetime.now().strftime("%Y-%m")
     
     # 1. Extrai Controle Semestral
-    key_semestral = f"sisagua/bruto/controle_semestral/{hoje}/controle_semestral.csv"
+    key_semestral = f"sisagua/controle_semestral/{mes_atual}/controle_semestral.csv"
     download_and_upload_to_s3(URL_SEMESTRAL, bucket_bronze, key_semestral)
     
     # 2. Extrai Controle Mensal (Parametros Basicos)
-    key_mensal = f"sisagua/bruto/controle_mensal/{hoje}/controle_mensal.csv"
+    key_mensal = f"sisagua/controle_mensal/{mes_atual}/controle_mensal.csv"
     download_and_upload_to_s3(URL_MENSAL, bucket_bronze, key_mensal)
     
     return {
