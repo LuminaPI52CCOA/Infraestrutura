@@ -78,3 +78,59 @@ module "alexa" {
   service_password = var.alexa_service_password
   alexa_skill_id   = var.alexa_skill_id
 }
+
+data "aws_iam_role" "lab_role" {
+  name = "LabRole"
+}
+
+# ==============================================================================
+# Pipeline de Dados (Bronze -> Silver -> Gold)
+# ==============================================================================
+
+module "s3_bronze" {
+  source                    = "../../modules/s3"
+  bucket_name               = "lumina-bronze"
+  enable_event_notification = true
+}
+
+module "s3_silver" {
+  source      = "../../modules/s3"
+  bucket_name = "lumina-silver"
+}
+
+module "s3_gold" {
+  source      = "../../modules/s3"
+  bucket_name = "lumina-gold"
+}
+
+module "s3_athena_results" {
+  source      = "../../modules/s3"
+  bucket_name = "lumina-athena-results"
+}
+
+module "lambda_extracao" {
+  source              = "../../modules/lambda"
+  function_name       = "${var.project_name}-extracao-sisagua"
+  role_arn            = data.aws_iam_role.lab_role.arn
+  source_dir          = "${path.module}/src/lambda_extracao"
+  schedule_expression = "cron(0 3 * * ? *)" # 3 AM daily
+  timeout             = 120
+  memory_size         = 256
+  environment_variables = {
+    BUCKET_BRONZE = module.s3_bronze.bucket_name
+  }
+}
+
+module "glue_transformacao" {
+  source              = "../../modules/glue"
+  job_name            = "${var.project_name}-bronze-to-silver"
+  role_arn            = data.aws_iam_role.lab_role.arn
+  script_bucket_id    = module.s3_athena_results.bucket_id
+  script_source_path  = "${path.module}/src/glue_transformacao/job.py"
+  trigger_bucket_name = module.s3_bronze.bucket_name
+  default_arguments = {
+    "--JOB_NAME"      = "${var.project_name}-bronze-to-silver"
+    "--BUCKET_BRONZE" = "s3://${module.s3_bronze.bucket_name}"
+    "--BUCKET_SILVER" = "s3://${module.s3_silver.bucket_name}"
+  }
+}
