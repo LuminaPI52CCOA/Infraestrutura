@@ -89,23 +89,23 @@ data "aws_iam_role" "lab_role" {
 
 module "s3_bronze" {
   source                    = "../../modules/s3"
-  bucket_name               = "${var.project_name}-bronze"
+  bucket_name               = "lumina-bronze"
   enable_event_notification = true
 }
 
 module "s3_silver" {
   source      = "../../modules/s3"
-  bucket_name = "${var.project_name}-silver"
+  bucket_name = "lumina-silver"
 }
 
 module "s3_gold" {
   source      = "../../modules/s3"
-  bucket_name = "${var.project_name}-gold"
+  bucket_name = "lumina-gold"
 }
 
 module "s3_athena_results" {
   source      = "../../modules/s3"
-  bucket_name = "${var.project_name}-athena-results"
+  bucket_name = "lumina-athena-results"
 }
 
 module "lambda_extracao" {
