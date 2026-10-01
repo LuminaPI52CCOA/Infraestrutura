@@ -156,3 +156,38 @@ module "alexa" {
   service_password = var.alexa_service_password
   alexa_skill_id   = var.alexa_skill_id
 }
+
+# ==============================================================================
+# Pipeline de Dados (Bronze -> Silver -> Gold)
+# ==============================================================================
+
+module "s3_bronze" {
+  source                    = "../../modules/s3"
+  bucket_name               = "lumina-bronze"
+  enable_event_notification = true
+}
+
+module "s3_silver" {
+  source      = "../../modules/s3"
+  bucket_name = "lumina-silver"
+}
+
+module "s3_gold" {
+  source      = "../../modules/s3"
+  bucket_name = "lumina-gold"
+}
+
+module "s3_athena_results" {
+  source      = "../../modules/s3"
+  bucket_name = "lumina-athena-results"
+}
+
+module "data_pipeline" {
+  source             = "../../../Data-Pipeline/terraform"
+  project_name       = var.project_name
+  environment        = "prod"
+  bucket_bronze_name = module.s3_bronze.bucket_name
+  bucket_silver_name = module.s3_silver.bucket_name
+  script_bucket_id   = module.s3_athena_results.bucket_id
+  enable_s3_trigger  = true
+}

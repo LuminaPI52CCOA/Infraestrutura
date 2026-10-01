@@ -1,4 +1,4 @@
-name: "Terraform Infrastructure Deploy/Destroy"
+name: "Data Pipeline Infrastructure Deploy/Destroy"
 
 on:
   workflow_dispatch:
@@ -10,13 +10,6 @@ on:
         options:
           - "apply"
           - "destroy"
-      environment:
-        description: "Perfil de Ambiente"
-        required: true
-        type: choice
-        options:
-          - "dev"
-          - "prod"
       aws_access_key_id:
         description: "AWS Access Key ID (Sessao temporaria do Learner Lab)"
         required: true
@@ -31,19 +24,12 @@ on:
         type: string
 
 jobs:
-  terraform:
-    name: "Executar Terraform (${{ inputs.action }} em ${{ inputs.environment }})"
+  terraform-data:
+    name: "Executar Terraform Pipeline de Dados (${{ inputs.action }})"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout do Repositorio Infraestrutura
         uses: actions/checkout@v4
-
-      - name: Checkout do Modulo Lambda-Alexa
-        uses: actions/checkout@v4
-        with:
-          repository: 'LuminaPI52CCOA/Lambda-Alexa'
-          ref: 'main'
-          path: 'Lambda-Alexa'
 
       - name: Checkout do Modulo Data-Pipeline
         uses: actions/checkout@v4
@@ -54,12 +40,6 @@ jobs:
 
       - name: Configurar estrutura de pastas multi-repo
         run: |
-          mkdir -p ../../../Lambda-Alexa
-          cp -r Lambda-Alexa/* ../../../Lambda-Alexa/ 2>/dev/null || true
-          mkdir -p ../../Lambda-Alexa
-          cp -r Lambda-Alexa/* ../../Lambda-Alexa/ 2>/dev/null || true
-          mkdir -p ../Lambda-Alexa
-          cp -r Lambda-Alexa/* ../Lambda-Alexa/ 2>/dev/null || true
           mkdir -p ../../../Data-Pipeline
           cp -r Data-Pipeline/* ../../../Data-Pipeline/ 2>/dev/null || true
           mkdir -p ../../Data-Pipeline
@@ -81,15 +61,15 @@ jobs:
           aws-region: "us-east-1"
 
       - name: Terraform Init
-        working-directory: ./environments/${{ inputs.environment }}
+        working-directory: ./environments/data
         run: terraform init
 
       - name: Terraform Apply
         if: ${{ inputs.action == 'apply' }}
-        working-directory: ./environments/${{ inputs.environment }}
+        working-directory: ./environments/data
         run: terraform apply -auto-approve
 
       - name: Terraform Destroy
         if: ${{ inputs.action == 'destroy' }}
-        working-directory: ./environments/${{ inputs.environment }}
+        working-directory: ./environments/data
         run: terraform destroy -auto-approve
