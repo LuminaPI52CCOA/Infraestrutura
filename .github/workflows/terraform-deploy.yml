@@ -34,6 +34,8 @@ jobs:
   terraform:
     name: "Executar Terraform (${{ inputs.action }} em ${{ inputs.environment }})"
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout do Repositorio Infraestrutura
         uses: actions/checkout@v4
@@ -80,6 +82,17 @@ jobs:
           aws-session-token: ${{ inputs.aws_session_token }}
           aws-region: "us-east-1"
 
+      - name: Restaurar Terraform State (Persistência entre Execuções)
+        run: |
+          mkdir -p /tmp/tfstate-repo
+          git clone --depth 1 -b terraform-states https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git /tmp/tfstate-repo 2>/dev/null || true
+          if [ -f "/tmp/tfstate-repo/environments/${{ inputs.environment }}/terraform.tfstate" ]; then
+            echo "Encontrado estado anterior para ${{ inputs.environment }}. Restaurando..."
+            cp /tmp/tfstate-repo/environments/${{ inputs.environment }}/terraform.tfstate* ./environments/${{ inputs.environment }}/
+          else
+            echo "Nenhum arquivo terraform.tfstate previo encontrado para ${{ inputs.environment }}."
+          fi
+
       - name: Terraform Init
         working-directory: ./environments/${{ inputs.environment }}
         run: terraform init
@@ -93,3 +106,32 @@ jobs:
         if: ${{ inputs.action == 'destroy' }}
         working-directory: ./environments/${{ inputs.environment }}
         run: terraform destroy -auto-approve
+
+      - name: Persistir Terraform State (Branch terraform-states)
+        if: always()
+        run: |
+          if [ -f "./environments/${{ inputs.environment }}/terraform.tfstate" ]; then
+            echo "Persistindo estado atualizado de ${{ inputs.environment }} na branch terraform-states..."
+            mkdir -p /tmp/tfstate-repo
+            cd /tmp/tfstate-repo
+            if [ ! -d ".git" ]; then
+              git init
+              git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+              git checkout -b terraform-states
+            fi
+            mkdir -p environments/${{ inputs.environment }}
+            cp $GITHUB_WORKSPACE/environments/${{ inputs.environment }}/terraform.tfstate* environments/${{ inputs.environment }}/
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add .
+            git commit -m "chore(terraform): atualiza state de ${{ inputs.environment }} [skip ci]" || echo "Nenhuma alteracao no state."
+            git push -u origin terraform-states --force || echo "Aviso: Nao foi possivel persistir via git push."
+          fi
+
+      - name: Salvar State como Artefato do Workflow
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-state-${{ inputs.environment }}
+          path: ./environments/${{ inputs.environment }}/terraform.tfstate*
+          retention-days: 7
