@@ -39,7 +39,7 @@ db_user     = "lumina_user"
 db_password = "LuminaSecurePass2026!"
 
 # --- Aplicação e Segurança ---
-jwt_secret      = "minha-chave-secreta-super-segura-e-longa-para-o-jwt-token-lumina"
+jwt_secret      = "RXhpc3RlIHVtYSB0ZW9yaWEgcXVlIGRpeiBxdWUsIHNlIHVtIGRpYSBhbGd16W0gZGVzY29icmlyIGV4YXRhbWVudGUgcGFyYSBxdWUgc2VydmUgbyBVbml2ZXJzbyBlIHBvciBxdWUgZWxlIGVzdOEgYXF1aSwgZWxlIGRlc2FwYXJlY2Vy4SBpbnN0YW50YW5lYW1lbnRlIGUgc2Vy4SBzdWJzdGl0de1kbyBwb3IgYWxnbyBhaW5kYSBtYWlzIGVzdHJhbmhvIGUgaW5leHBsaWPhdmVsLiBFeGlzdGUgdW1hIHNlZ3VuZGEgdGVvcmlhIHF1ZSBkaXogcXVlIGlzc28gauEgYWNvbnRlY2V1Li4u"
 jwt_validity    = 86400000
 gemini_api_key  = "SUA_CHAVE_GEMINI_AQUI"
 

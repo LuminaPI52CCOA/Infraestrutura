@@ -106,17 +106,30 @@ resource "aws_instance" "frontend" {
               sed -i "s|export const API_BASE_URL = .*;|export const API_BASE_URL = '';|g" src/api/config.js 2>/dev/null || true
 
               # Build estatico Vite
-              npm install --legacy-peer-deps
-              npm run build
-
-              # Copiar bundle para o diretorio web do NGINX
-              rm -rf /var/www/html/*
-              cp -r dist/* /var/www/html/
-              chown -R www-data:www-data /var/www/html
-              chmod -R 755 /var/www/html
-
-              # Recarregar NGINX
-              systemctl reload nginx
+              npm install --legacy-peer-deps react-is || npm install --legacy-peer-deps
+              if npm run build; then
+                # Copiar bundle para o diretorio web do NGINX
+                rm -rf /var/www/html/*
+                cp -r dist/* /var/www/html/
+                chown -R www-data:www-data /var/www/html
+                chmod -R 755 /var/www/html
+                systemctl reload nginx
+                echo "Frontend React/Vite implantado com sucesso!"
+              else
+                echo "Falha no build do Vite! Gerando pagina de erro informativa."
+                cat << 'ERRHTML' > /var/www/html/index.html
+              <!DOCTYPE html>
+              <html>
+              <head><meta charset="utf-8"><title>Lumina - Erro no Build</title></head>
+              <body style="font-family:sans-serif;text-align:center;padding:50px;background:#0f172a;color:#f87171;">
+                <h1>❌ Erro na Compilação do Frontend</h1>
+                <p style="color:#cbd5e1;">Ocorreu uma falha durante o <code>npm run build</code>. Verifique <code>/var/log/frontend-provision.log</code> na instância EC2.</p>
+              </body>
+              </html>
+              ERRHTML
+                systemctl reload nginx
+                exit 1
+              fi
               EOF
 
   tags = {
