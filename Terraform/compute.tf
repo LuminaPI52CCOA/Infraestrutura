@@ -134,7 +134,7 @@ resource "aws_instance" "frontend_a" {
                   }
 
                   # Proxy reverso para as chamadas de API direcionadas ao ALB Interno
-                  location ~ ^/(usuarios|clientes|consultas|convenios|anamnese|perfis|swagger-ui|v3|actuator|api) {
+                  location ~ ^/(alexa|usuarios|clientes|consultas|convenios|anamnese|perfis|swagger-ui|v3|actuator|api) {
                       proxy_pass http://${aws_lb.internal.dns_name}:8080;
                       proxy_http_version 1.1;
                       proxy_set_header Host $host;
@@ -257,7 +257,7 @@ resource "aws_instance" "frontend_b" {
                   }
 
                   # Proxy reverso para as chamadas de API direcionadas ao ALB Interno
-                  location ~ ^/(usuarios|clientes|consultas|convenios|anamnese|perfis|swagger-ui|v3|actuator|api) {
+                  location ~ ^/(alexa|usuarios|clientes|consultas|convenios|anamnese|perfis|swagger-ui|v3|actuator|api) {
                       proxy_pass http://${aws_lb.internal.dns_name}:8080;
                       proxy_http_version 1.1;
                       proxy_set_header Host $host;
