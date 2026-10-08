@@ -75,6 +75,11 @@ resource "aws_instance" "backend" {
               # Google Gemini AI
               gemini.api.key=${var.gemini_api_key}
 
+              # Alexa LWA & Reminders
+              alexa.lwa.client-id=${var.alexa_lwa_client_id}
+              alexa.lwa.client-secret=${var.alexa_lwa_client_secret}
+              alexa.reminders.enabled=${var.alexa_reminders_enabled}
+
               # Actuator Health Check
               management.endpoints.web.exposure.include=*
               management.endpoint.health.show-details=always

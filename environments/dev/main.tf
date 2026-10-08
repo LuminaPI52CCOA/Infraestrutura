@@ -35,24 +35,27 @@ module "database" {
 }
 
 module "backend" {
-  source              = "../../modules/backend"
-  project_name        = var.project_name
-  environment         = "dev"
-  is_dev              = true
-  instance_count      = 1
-  instance_type       = var.instance_type_backend
-  subnet_ids          = [module.network.public_subnet_ids[0]]
-  security_group_ids  = [module.network.sg_backend_id]
-  key_name            = module.keypair.key_name
-  db_private_ip       = module.database.primary_private_ip
-  db_name             = var.db_name
-  db_user             = var.db_user
-  db_password         = var.db_password
-  jwt_secret          = var.jwt_secret
-  jwt_validity        = var.jwt_validity
-  gemini_api_key      = var.gemini_api_key
-  backend_repo_url    = var.backend_repo_url
-  backend_repo_branch = var.backend_repo_branch
+  source                  = "../../modules/backend"
+  project_name            = var.project_name
+  environment             = "dev"
+  is_dev                  = true
+  instance_count          = 1
+  instance_type           = var.instance_type_backend
+  subnet_ids              = [module.network.public_subnet_ids[0]]
+  security_group_ids      = [module.network.sg_backend_id]
+  key_name                = module.keypair.key_name
+  db_private_ip           = module.database.primary_private_ip
+  db_name                 = var.db_name
+  db_user                 = var.db_user
+  db_password             = var.db_password
+  jwt_secret              = var.jwt_secret
+  jwt_validity            = var.jwt_validity
+  gemini_api_key          = var.gemini_api_key
+  alexa_lwa_client_id     = var.alexa_lwa_client_id
+  alexa_lwa_client_secret = var.alexa_lwa_client_secret
+  alexa_reminders_enabled = var.alexa_reminders_enabled
+  backend_repo_url        = var.backend_repo_url
+  backend_repo_branch     = var.backend_repo_branch
 }
 
 module "frontend" {

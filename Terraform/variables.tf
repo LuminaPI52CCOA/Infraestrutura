@@ -171,3 +171,24 @@ variable "lab_instance_profile_name" {
   default     = "LabInstanceProfile"
 }
 
+variable "alexa_lwa_client_id" {
+  description = "Client ID do Login with Amazon (LWA) para envio de lembretes da Alexa"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "alexa_lwa_client_secret" {
+  description = "Client Secret do Login with Amazon (LWA) para envio de lembretes da Alexa"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "alexa_reminders_enabled" {
+  description = "Flag para habilitar ou desabilitar o servico de lembretes proativos da Alexa"
+  type        = bool
+  default     = true
+}
+
+

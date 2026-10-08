@@ -17,6 +17,9 @@ frontend_repo_branch = "feat/lambda-alexa"
 db_repo_branch       = "feat/lambda-alexa"
 
 # Alexa
-alexa_service_email    = "john@doe.com"
-alexa_service_password = "123456"
-alexa_skill_id         = ""
+alexa_service_email     = "john@doe.com"
+alexa_service_password  = "123456"
+alexa_skill_id          = ""
+alexa_lwa_client_id     = "amzn1.application-oa2-client.SUA_CHAVE_AQUI"
+alexa_lwa_client_secret = "amzn1.oa2-cs.v1.SEU_SEGREDO_AQUI"
+alexa_reminders_enabled = true
