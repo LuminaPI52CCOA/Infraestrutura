@@ -94,7 +94,7 @@ variable "backend_repo_url" {
 variable "backend_repo_branch" {
   description = "Branch do repositorio Backend"
   type        = string
-  default     = "feat/lambda-alexa"
+  default     = "main"
 }
 
 variable "frontend_repo_url" {
@@ -106,7 +106,7 @@ variable "frontend_repo_url" {
 variable "frontend_repo_branch" {
   description = "Branch do repositorio Frontend"
   type        = string
-  default     = "feat/lambda-alexa"
+  default     = "main"
 }
 
 variable "db_repo_url" {
@@ -118,7 +118,7 @@ variable "db_repo_url" {
 variable "db_repo_branch" {
   description = "Branch do repositorio Banco de Dados"
   type        = string
-  default     = "feat/lambda-alexa"
+  default     = "main"
 }
 
 variable "alexa_function_name" {

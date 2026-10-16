@@ -12,9 +12,9 @@ jwt_secret      = "RXhpc3RlIHVtYSB0ZW9yaWEgcXVlIGRpeiBxdWUsIHNlIHVtIGRpYSBhbGd16
 gemini_api_key  = "SUA_CHAVE_GEMINI_AQUI"
 
 # Repositórios e Branches
-backend_repo_branch  = "feat/lambda-alexa"
-frontend_repo_branch = "feat/lambda-alexa"
-db_repo_branch       = "feat/lambda-alexa"
+backend_repo_branch  = "main"
+frontend_repo_branch = "main"
+db_repo_branch       = "main"
 
 # Alexa
 alexa_service_email     = "john@doe.com"

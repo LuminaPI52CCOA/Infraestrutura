@@ -103,7 +103,7 @@ variable "backend_repo_url" {
 variable "backend_repo_branch" {
   description = "Branch a ser clonada durante a subida"
   type        = string
-  default     = "feat/lambda-alexa"
+  default     = "main"
 }
 
 variable "target_group_arns" {
