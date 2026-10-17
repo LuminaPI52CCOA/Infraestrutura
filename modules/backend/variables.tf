@@ -131,3 +131,16 @@ variable "alexa_reminders_enabled" {
   type        = bool
   default     = true
 }
+
+variable "aws_region" {
+  description = "Regiao da AWS onde os recursos residem"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "s3_bucket_name" {
+  description = "Nome do bucket S3 de armazenamento de midias clinicas"
+  type        = string
+  default     = "lumina-storage"
+}
+
