@@ -74,7 +74,7 @@ resource "aws_instance" "frontend" {
                   }
 
                   # Proxy reverso para APIs e Alexa Skills
-                  location ~ ^/(alexa|usuarios|clientes|consultas|convenios|anamnese|perfis|swagger-ui|v3|actuator|api) {
+                  location ~ ^/(tipos-midia|alexa|usuarios|clientes|consultas|convenios|anamnese|anamneses|perfis|swagger-ui|v3|actuator|api) {
                       proxy_pass http://${var.backend_endpoint}:8080;
                       proxy_http_version 1.1;
                       proxy_set_header Host $host;
