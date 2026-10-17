@@ -31,7 +31,7 @@ resource "aws_s3_bucket_cors_configuration" "app_storage_cors" {
     allowed_origins = [
       "http://localhost:5173",
       "http://localhost:3000",
-      "https://${var.project_name}.app" 
+      "https://${var.project_name}.app"
     ]
     expose_headers  = ["ETag"]
     max_age_seconds = 3600
