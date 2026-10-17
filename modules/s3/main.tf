@@ -27,6 +27,19 @@ resource "aws_cloudformation_stack" "bucket" {
               RestrictPublicBuckets = true
             }
           },
+          var.enable_cors ? {
+            CorsConfiguration = {
+              CorsRules = [
+                {
+                  AllowedHeaders = ["*"]
+                  AllowedMethods = ["GET", "PUT", "POST", "HEAD"]
+                  AllowedOrigins = ["*"]
+                  ExposedHeaders = ["ETag"]
+                  MaxAge         = 3600
+                }
+              ]
+            }
+          } : {},
           var.enable_event_notification ? {
             NotificationConfiguration = {
               EventBridgeConfiguration = {

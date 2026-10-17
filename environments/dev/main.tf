@@ -34,6 +34,12 @@ module "database" {
   associate_public_ip_address = true
 }
 
+module "s3_storage" {
+  source      = "../../modules/s3"
+  bucket_name = "${var.project_name}-storage"
+  enable_cors = true
+}
+
 module "backend" {
   source                  = "../../modules/backend"
   project_name            = var.project_name
@@ -56,6 +62,7 @@ module "backend" {
   alexa_reminders_enabled = var.alexa_reminders_enabled
   backend_repo_url        = var.backend_repo_url
   backend_repo_branch     = var.backend_repo_branch
+  s3_bucket_name          = module.s3_storage.bucket_name
 }
 
 module "frontend" {
