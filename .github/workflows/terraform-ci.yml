@@ -31,6 +31,13 @@ jobs:
           ref: 'main'
           path: 'Lambda-Alexa'
 
+      - name: Checkout do Modulo Data-Pipeline
+        uses: actions/checkout@v4
+        with:
+          repository: 'LuminaPI52CCOA/Data-Pipeline'
+          ref: 'main'
+          path: 'Data-Pipeline'
+
       - name: Configurar estrutura de pastas multi-repo
         run: |
           mkdir -p ../../../Lambda-Alexa
@@ -39,6 +46,12 @@ jobs:
           cp -r Lambda-Alexa/* ../../Lambda-Alexa/ 2>/dev/null || true
           mkdir -p ../Lambda-Alexa
           cp -r Lambda-Alexa/* ../Lambda-Alexa/ 2>/dev/null || true
+          mkdir -p ../../../Data-Pipeline
+          cp -r Data-Pipeline/* ../../../Data-Pipeline/ 2>/dev/null || true
+          mkdir -p ../../Data-Pipeline
+          cp -r Data-Pipeline/* ../../Data-Pipeline/ 2>/dev/null || true
+          mkdir -p ../Data-Pipeline
+          cp -r Data-Pipeline/* ../Data-Pipeline/ 2>/dev/null || true
 
       - name: Instalar Terraform
         uses: hashicorp/setup-terraform@v3
@@ -56,6 +69,12 @@ jobs:
 
       - name: Validar Ambiente Prod
         working-directory: ./environments/prod
+        run: |
+          terraform init -backend=false
+          terraform validate
+
+      - name: Validar Ambiente Data
+        working-directory: ./environments/data
         run: |
           terraform init -backend=false
           terraform validate

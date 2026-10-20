@@ -134,7 +134,7 @@ resource "aws_instance" "frontend_a" {
                   }
 
                   # Proxy reverso para as chamadas de API direcionadas ao ALB Interno
-                  location ~ ^/(usuarios|clientes|consultas|convenios|anamnese|perfis|swagger-ui|v3|actuator|api) {
+                  location ~ ^/(tipos-midia|alexa|usuarios|clientes|consultas|convenios|anamnese|anamneses|perfis|swagger-ui|v3|actuator|api) {
                       proxy_pass http://${aws_lb.internal.dns_name}:8080;
                       proxy_http_version 1.1;
                       proxy_set_header Host $host;
@@ -166,17 +166,30 @@ resource "aws_instance" "frontend_a" {
               sed -i "s|export const API_BASE_URL = .*;|export const API_BASE_URL = '';|g" src/api/config.js 2>/dev/null || true
 
               # Instalação das dependências e build estático com Vite
-              npm install --legacy-peer-deps
-              npm run build
-
-              # Copiar bundle final para o diretório web do NGINX
-              rm -rf /var/www/html/*
-              cp -r dist/* /var/www/html/
-              chown -R www-data:www-data /var/www/html
-              chmod -R 755 /var/www/html
-
-              # Recarregar NGINX com a aplicacao React construida
-              systemctl reload nginx
+              npm install --legacy-peer-deps react-is || npm install --legacy-peer-deps
+              if npm run build; then
+                # Copiar bundle final para o diretório web do NGINX
+                rm -rf /var/www/html/*
+                cp -r dist/* /var/www/html/
+                chown -R www-data:www-data /var/www/html
+                chmod -R 755 /var/www/html
+                systemctl reload nginx
+                echo "Frontend React/Vite implantado com sucesso!"
+              else
+                echo "Falha no build do Vite! Gerando pagina de erro informativa."
+                cat << 'ERRHTML' > /var/www/html/index.html
+              <!DOCTYPE html>
+              <html>
+              <head><meta charset="utf-8"><title>Lumina - Erro no Build</title></head>
+              <body style="font-family:sans-serif;text-align:center;padding:50px;background:#0f172a;color:#f87171;">
+                <h1>❌ Erro na Compilação do Frontend</h1>
+                <p style="color:#cbd5e1;">Ocorreu uma falha durante o <code>npm run build</code>. Verifique <code>/var/log/frontend-provision.log</code> na instância EC2.</p>
+              </body>
+              </html>
+              ERRHTML
+                systemctl reload nginx
+                exit 1
+              fi
               EOF
 
   tags = {
@@ -244,7 +257,7 @@ resource "aws_instance" "frontend_b" {
                   }
 
                   # Proxy reverso para as chamadas de API direcionadas ao ALB Interno
-                  location ~ ^/(usuarios|clientes|consultas|convenios|anamnese|perfis|swagger-ui|v3|actuator|api) {
+                  location ~ ^/(tipos-midia|alexa|usuarios|clientes|consultas|convenios|anamnese|anamneses|perfis|swagger-ui|v3|actuator|api) {
                       proxy_pass http://${aws_lb.internal.dns_name}:8080;
                       proxy_http_version 1.1;
                       proxy_set_header Host $host;
@@ -276,17 +289,30 @@ resource "aws_instance" "frontend_b" {
               sed -i "s|export const API_BASE_URL = .*;|export const API_BASE_URL = '';|g" src/api/config.js 2>/dev/null || true
 
               # Instalação das dependências e build estático com Vite
-              npm install --legacy-peer-deps
-              npm run build
-
-              # Copiar bundle final para o diretório web do NGINX
-              rm -rf /var/www/html/*
-              cp -r dist/* /var/www/html/
-              chown -R www-data:www-data /var/www/html
-              chmod -R 755 /var/www/html
-
-              # Recarregar NGINX com a aplicacao React construida
-              systemctl reload nginx
+              npm install --legacy-peer-deps react-is || npm install --legacy-peer-deps
+              if npm run build; then
+                # Copiar bundle final para o diretório web do NGINX
+                rm -rf /var/www/html/*
+                cp -r dist/* /var/www/html/
+                chown -R www-data:www-data /var/www/html
+                chmod -R 755 /var/www/html
+                systemctl reload nginx
+                echo "Frontend React/Vite implantado com sucesso!"
+              else
+                echo "Falha no build do Vite! Gerando pagina de erro informativa."
+                cat << 'ERRHTML' > /var/www/html/index.html
+              <!DOCTYPE html>
+              <html>
+              <head><meta charset="utf-8"><title>Lumina - Erro no Build</title></head>
+              <body style="font-family:sans-serif;text-align:center;padding:50px;background:#0f172a;color:#f87171;">
+                <h1>❌ Erro na Compilação do Frontend</h1>
+                <p style="color:#cbd5e1;">Ocorreu uma falha durante o <code>npm run build</code>. Verifique <code>/var/log/frontend-provision.log</code> na instância EC2.</p>
+              </body>
+              </html>
+              ERRHTML
+                systemctl reload nginx
+                exit 1
+              fi
               EOF
 
   tags = {
@@ -354,6 +380,15 @@ resource "aws_instance" "backend_a" {
 
               # Google Gemini AI
               gemini.api.key=${var.gemini_api_key}
+
+              # Alexa LWA & Reminders
+              alexa.lwa.client-id=${var.alexa_lwa_client_id}
+              alexa.lwa.client-secret=${var.alexa_lwa_client_secret}
+              alexa.reminders.enabled=${var.alexa_reminders_enabled}
+
+              # AWS S3 Midias Clinicas
+              aws.region=${var.aws_region}
+              aws.s3.bucket-name=${local.s3_bucket_name}
 
               # Actuator Health Check
               management.endpoints.web.exposure.include=*
@@ -458,6 +493,15 @@ resource "aws_instance" "backend_b" {
 
               # Google Gemini AI
               gemini.api.key=${var.gemini_api_key}
+
+              # Alexa LWA & Reminders
+              alexa.lwa.client-id=${var.alexa_lwa_client_id}
+              alexa.lwa.client-secret=${var.alexa_lwa_client_secret}
+              alexa.reminders.enabled=${var.alexa_reminders_enabled}
+
+              # AWS S3 Midias Clinicas
+              aws.region=${var.aws_region}
+              aws.s3.bucket-name=${local.s3_bucket_name}
 
               # Actuator Health Check
               management.endpoints.web.exposure.include=*

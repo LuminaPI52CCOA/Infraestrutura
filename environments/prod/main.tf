@@ -34,26 +34,36 @@ module "database" {
   associate_public_ip_address = false
 }
 
+module "s3_storage" {
+  source      = "../../modules/s3"
+  bucket_name = "${var.project_name}-storage"
+  enable_cors = true
+}
+
 module "backend" {
-  source              = "../../modules/backend"
-  project_name        = var.project_name
-  environment         = "prod"
-  is_dev              = false
-  instance_count      = 2
-  instance_type       = var.instance_type_backend
-  subnet_ids          = module.network.private_app_subnet_ids
-  security_group_ids  = [module.network.sg_backend_id]
-  key_name            = module.keypair.key_name
-  db_private_ip       = module.database.primary_private_ip
-  db_name             = var.db_name
-  db_user             = var.db_user
-  db_password         = var.db_password
-  jwt_secret          = var.jwt_secret
-  jwt_validity        = var.jwt_validity
-  gemini_api_key      = var.gemini_api_key
-  backend_repo_url    = var.backend_repo_url
-  backend_repo_branch = var.backend_repo_branch
-  target_group_arns   = [module.network.alb_internal_tg_backend_arn]
+  source                  = "../../modules/backend"
+  project_name            = var.project_name
+  environment             = "prod"
+  is_dev                  = false
+  instance_count          = 2
+  instance_type           = var.instance_type_backend
+  subnet_ids              = module.network.private_app_subnet_ids
+  security_group_ids      = [module.network.sg_backend_id]
+  key_name                = module.keypair.key_name
+  db_private_ip           = module.database.primary_private_ip
+  db_name                 = var.db_name
+  db_user                 = var.db_user
+  db_password             = var.db_password
+  jwt_secret              = var.jwt_secret
+  jwt_validity            = var.jwt_validity
+  gemini_api_key          = var.gemini_api_key
+  alexa_lwa_client_id     = var.alexa_lwa_client_id
+  alexa_lwa_client_secret = var.alexa_lwa_client_secret
+  alexa_reminders_enabled = var.alexa_reminders_enabled
+  backend_repo_url        = var.backend_repo_url
+  backend_repo_branch     = var.backend_repo_branch
+  s3_bucket_name          = module.s3_storage.bucket_name
+  target_group_arns       = [module.network.alb_internal_tg_backend_arn]
 }
 
 module "frontend" {
@@ -155,4 +165,39 @@ module "alexa" {
   service_email    = var.alexa_service_email
   service_password = var.alexa_service_password
   alexa_skill_id   = var.alexa_skill_id
+}
+
+# ==============================================================================
+# Pipeline de Dados (Bronze -> Silver -> Gold)
+# ==============================================================================
+
+module "s3_bronze" {
+  source                    = "../../modules/s3"
+  bucket_name               = "lumina-bronze"
+  enable_event_notification = true
+}
+
+module "s3_silver" {
+  source      = "../../modules/s3"
+  bucket_name = "lumina-silver"
+}
+
+module "s3_gold" {
+  source      = "../../modules/s3"
+  bucket_name = "lumina-gold"
+}
+
+module "s3_athena_results" {
+  source      = "../../modules/s3"
+  bucket_name = "lumina-athena-results"
+}
+
+module "data_pipeline" {
+  source             = "../../../Data-Pipeline/terraform"
+  project_name       = var.project_name
+  environment        = "prod"
+  bucket_bronze_name = module.s3_bronze.bucket_name
+  bucket_silver_name = module.s3_silver.bucket_name
+  script_bucket_id   = module.s3_athena_results.bucket_id
+  enable_s3_trigger  = true
 }

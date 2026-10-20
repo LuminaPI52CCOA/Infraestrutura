@@ -13,3 +13,10 @@ variable "enable_event_notification" {
   default     = false
   description = "Habilita a notificacao de eventos para o EventBridge"
 }
+
+variable "enable_cors" {
+  type        = bool
+  default     = false
+  description = "Habilita regras de CORS para upload direto via browser"
+}
+

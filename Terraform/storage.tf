@@ -22,6 +22,44 @@ resource "terraform_data" "app_storage" {
   }
 }
 
+resource "aws_s3_bucket_cors_configuration" "app_storage_cors" {
+  bucket = local.s3_bucket_name
+
+  cors_rule {
+    allowed_headers = ["*"]
+    allowed_methods = ["GET", "PUT", "POST", "HEAD"]
+    allowed_origins = ["*"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3600
+  }
+
+  depends_on = [terraform_data.app_storage]
+}
+
+resource "aws_s3_bucket_public_access_block" "app_storage_pab" {
+  bucket = local.s3_bucket_name
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+
+  depends_on = [terraform_data.app_storage]
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "app_storage_crypto" {
+  bucket = local.s3_bucket_name
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+
+  depends_on = [terraform_data.app_storage]
+}
+
+
 resource "aws_efs_file_system" "shared_fs" {
   creation_token   = "${var.project_name}-efs"
   performance_mode = "generalPurpose"

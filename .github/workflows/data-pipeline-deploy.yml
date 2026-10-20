@@ -1,0 +1,117 @@
+name: "Data Pipeline Infrastructure Deploy/Destroy"
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Acao Terraform a ser executada"
+        required: true
+        type: choice
+        options:
+          - "apply"
+          - "destroy"
+      aws_access_key_id:
+        description: "AWS Access Key ID (Sessao temporaria do Learner Lab)"
+        required: true
+        type: string
+      aws_secret_access_key:
+        description: "AWS Secret Access Key"
+        required: true
+        type: string
+      aws_session_token:
+        description: "AWS Session Token"
+        required: true
+        type: string
+
+jobs:
+  terraform-data:
+    name: "Executar Terraform Pipeline de Dados (${{ inputs.action }})"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout do Repositorio Infraestrutura
+        uses: actions/checkout@v4
+
+      - name: Checkout do Modulo Data-Pipeline
+        uses: actions/checkout@v4
+        with:
+          repository: 'LuminaPI52CCOA/Data-Pipeline'
+          ref: 'main'
+          path: 'Data-Pipeline'
+
+      - name: Configurar estrutura de pastas multi-repo
+        run: |
+          mkdir -p ../../../Data-Pipeline
+          cp -r Data-Pipeline/* ../../../Data-Pipeline/ 2>/dev/null || true
+          mkdir -p ../../Data-Pipeline
+          cp -r Data-Pipeline/* ../../Data-Pipeline/ 2>/dev/null || true
+          mkdir -p ../Data-Pipeline
+          cp -r Data-Pipeline/* ../Data-Pipeline/ 2>/dev/null || true
+
+      - name: Instalar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.5"
+
+      - name: Autenticar na AWS (Credenciais Efemeras do Lab)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ inputs.aws_access_key_id }}
+          aws-secret-access-key: ${{ inputs.aws_secret_access_key }}
+          aws-session-token: ${{ inputs.aws_session_token }}
+          aws-region: "us-east-1"
+
+      - name: Restaurar Terraform State (Persistência entre Execuções)
+        run: |
+          mkdir -p /tmp/tfstate-repo
+          git clone --depth 1 -b terraform-states https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git /tmp/tfstate-repo 2>/dev/null || true
+          if [ -f "/tmp/tfstate-repo/environments/data/terraform.tfstate" ]; then
+            echo "Encontrado estado anterior para data. Restaurando..."
+            cp /tmp/tfstate-repo/environments/data/terraform.tfstate* ./environments/data/
+          else
+            echo "Nenhum arquivo terraform.tfstate previo encontrado para data."
+          fi
+
+      - name: Terraform Init
+        working-directory: ./environments/data
+        run: terraform init
+
+      - name: Terraform Apply
+        if: ${{ inputs.action == 'apply' }}
+        working-directory: ./environments/data
+        run: terraform apply -auto-approve
+
+      - name: Terraform Destroy
+        if: ${{ inputs.action == 'destroy' }}
+        working-directory: ./environments/data
+        run: terraform destroy -auto-approve
+
+      - name: Persistir Terraform State (Branch terraform-states)
+        if: always()
+        run: |
+          if [ -f "./environments/data/terraform.tfstate" ]; then
+            echo "Persistindo estado atualizado de data na branch terraform-states..."
+            mkdir -p /tmp/tfstate-repo
+            cd /tmp/tfstate-repo
+            if [ ! -d ".git" ]; then
+              git init
+              git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+              git checkout -b terraform-states
+            fi
+            mkdir -p environments/data
+            cp $GITHUB_WORKSPACE/environments/data/terraform.tfstate* environments/data/
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add .
+            git commit -m "chore(terraform): atualiza state de data [skip ci]" || echo "Nenhuma alteracao no state."
+            git push -u origin terraform-states --force || echo "Aviso: Nao foi possivel persistir via git push."
+          fi
+
+      - name: Salvar State como Artefato do Workflow
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-state-data
+          path: ./environments/data/terraform.tfstate*
+          retention-days: 7

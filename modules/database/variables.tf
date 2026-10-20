@@ -72,7 +72,7 @@ variable "db_repo_url" {
 variable "db_repo_branch" {
   description = "Branch contendo a versao atual do lumina.sql"
   type        = string
-  default     = "feat/lambda-alexa"
+  default     = "main"
 }
 
 variable "associate_public_ip_address" {

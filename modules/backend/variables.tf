@@ -103,7 +103,7 @@ variable "backend_repo_url" {
 variable "backend_repo_branch" {
   description = "Branch a ser clonada durante a subida"
   type        = string
-  default     = "feat/lambda-alexa"
+  default     = "main"
 }
 
 variable "target_group_arns" {
@@ -111,3 +111,36 @@ variable "target_group_arns" {
   type        = list(string)
   default     = []
 }
+
+variable "alexa_lwa_client_id" {
+  description = "Client ID do Login with Amazon (LWA) para envio de lembretes da Alexa"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "alexa_lwa_client_secret" {
+  description = "Client Secret do Login with Amazon (LWA) para envio de lembretes da Alexa"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "alexa_reminders_enabled" {
+  description = "Flag para habilitar ou desabilitar o servico de lembretes proativos da Alexa"
+  type        = bool
+  default     = true
+}
+
+variable "aws_region" {
+  description = "Regiao da AWS onde os recursos residem"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "s3_bucket_name" {
+  description = "Nome do bucket S3 de armazenamento de midias clinicas"
+  type        = string
+  default     = "lumina-storage"
+}
+
