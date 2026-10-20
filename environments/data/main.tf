@@ -33,3 +33,14 @@ module "data_pipeline" {
   script_bucket_id   = module.s3_athena_results.bucket_id
   enable_s3_trigger  = var.enable_s3_trigger
 }
+
+# ==============================================================================
+# Pipeline Dedicado aos Logs (Fluent Bit -> Bronze -> Silver -> Athena)
+# ==============================================================================
+
+resource "aws_athena_database" "logs_db" {
+  name   = "lumina_logs_db"
+  bucket = module.s3_athena_results.bucket_id
+
+  comment = "Banco de dados analitico dedicado a telemetria e logs processados pelo AWS Glue"
+}

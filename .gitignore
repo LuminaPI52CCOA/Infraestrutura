@@ -20,3 +20,6 @@ crash.*.log
 Thumbs.db
 .idea/
 .vscode/
+
+# Docs locais que nao sobem na esteira
+memory/
