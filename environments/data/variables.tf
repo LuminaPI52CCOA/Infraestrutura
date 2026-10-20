@@ -19,5 +19,5 @@ variable "environment" {
 variable "enable_s3_trigger" {
   description = "Habilitar acionamento automatico do Glue Job pelo EventBridge"
   type        = bool
-  default     = true
+  default     = false
 }
