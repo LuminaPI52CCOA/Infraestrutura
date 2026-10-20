@@ -134,3 +134,29 @@ module "glue_transformacao" {
     "--BUCKET_SILVER" = "s3://${module.s3_silver.bucket_name}"
   }
 }
+
+# ==============================================================================
+# Pipeline Dedicado aos Logs (Fluent Bit -> Bronze -> Silver -> Athena)
+# ==============================================================================
+
+module "glue_logs" {
+  source              = "../../modules/glue"
+  job_name            = "${var.project_name}-logs-bronze-to-silver"
+  role_arn            = data.aws_iam_role.lab_role.arn
+  script_bucket_id    = module.s3_athena_results.bucket_id
+  script_source_path  = "${path.module}/src/glue_logs/job_logs.py"
+  trigger_bucket_name = module.s3_bronze.bucket_name
+  default_arguments = {
+    "--JOB_NAME"      = "${var.project_name}-logs-bronze-to-silver"
+    "--BUCKET_BRONZE" = "s3://${module.s3_bronze.bucket_name}"
+    "--BUCKET_SILVER" = "s3://${module.s3_silver.bucket_name}"
+  }
+}
+
+resource "aws_athena_database" "logs_db" {
+  name   = "lumina_logs_db"
+  bucket = module.s3_athena_results.bucket_id
+
+  comment = "Banco de dados analitico dedicado a telemetria e logs processados pelo AWS Glue"
+}
+
