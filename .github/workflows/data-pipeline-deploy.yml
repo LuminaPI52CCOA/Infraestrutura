@@ -10,6 +10,11 @@ on:
         options:
           - "apply"
           - "destroy"
+      reset_state:
+        description: "Descartar state previo e recriar do zero (util se trocou de conta AWS / Learner Lab)"
+        required: false
+        type: boolean
+        default: false
       aws_access_key_id:
         description: "AWS Access Key ID (Sessao temporaria do Learner Lab)"
         required: true
@@ -64,9 +69,30 @@ jobs:
 
       - name: Restaurar Terraform State (Persistência entre Execuções)
         run: |
+          if [ "${{ inputs.reset_state }}" = "true" ]; then
+            echo "Opcao reset_state ativada. Ignorando e descartando state previo para data."
+            rm -f ./environments/data/terraform.tfstate*
+            exit 0
+          fi
+
           mkdir -p /tmp/tfstate-repo
           git clone --depth 1 -b terraform-states https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git /tmp/tfstate-repo 2>/dev/null || true
-          if [ -f "/tmp/tfstate-repo/environments/data/terraform.tfstate" ]; then
+          
+          STATE_FILE="/tmp/tfstate-repo/environments/data/terraform.tfstate"
+          if [ -f "$STATE_FILE" ]; then
+            CURRENT_ACCOUNT=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "")
+            STATE_ACCOUNTS=$(grep -o -E 'arn:aws:[^:]+:[^:]+:([0-9]{12})' "$STATE_FILE" 2>/dev/null | awk -F: '{print $5}' | sort -u | grep -v '^$' || true)
+
+            if [ -n "$CURRENT_ACCOUNT" ] && [ -n "$STATE_ACCOUNTS" ]; then
+              for ACC in $STATE_ACCOUNTS; do
+                if [ "$ACC" != "$CURRENT_ACCOUNT" ]; then
+                  echo "::warning:: Conflito de conta detectado! O state anterior pertence a conta $ACC, mas as credenciais atuais sao da conta $CURRENT_ACCOUNT. Descartando state anterior para evitar conflito de ARNs no Learner Lab."
+                  rm -f ./environments/data/terraform.tfstate*
+                  exit 0
+                fi
+              done
+            fi
+
             echo "Encontrado estado anterior para data. Restaurando..."
             cp /tmp/tfstate-repo/environments/data/terraform.tfstate* ./environments/data/
           else
