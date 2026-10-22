@@ -1,15 +1,9 @@
-resource "random_string" "suffix" {
-  length  = 6
-  special = false
-  upper   = false
-}
-
 locals {
-  bucket_name = "${var.bucket_name}-${random_string.suffix.result}"
+  bucket_name = var.bucket_name
 }
 
 resource "aws_cloudformation_stack" "bucket" {
-  name = "cf-s3-${var.bucket_name}-${random_string.suffix.result}"
+  name = "cf-s3-${var.bucket_name}"
 
   template_body = jsonencode({
     AWSTemplateFormatVersion = "2010-09-09"
