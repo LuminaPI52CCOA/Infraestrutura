@@ -22,6 +22,21 @@ on:
         required: false
         type: boolean
         default: false
+      backend_branch:
+        description: "Branch do Back-end a compilar para o ECR"
+        required: false
+        default: "develop"
+        type: string
+      frontend_branch:
+        description: "Branch do Front-End a compilar para o ECR"
+        required: false
+        default: "develop"
+        type: string
+      database_branch:
+        description: "Branch do Banco-de-dados a compilar para o ECR"
+        required: false
+        default: "develop"
+        type: string
       aws_access_key_id:
         description: "AWS Access Key ID (Sessao temporaria do Learner Lab)"
         required: true
@@ -65,6 +80,30 @@ jobs:
           ref: 'main'
           path: 'Data-Pipeline'
 
+      - name: Checkout do Repositorio Back-end
+        if: ${{ inputs.action == 'apply' }}
+        uses: actions/checkout@v4
+        with:
+          repository: 'LuminaPI52CCOA/Back-end'
+          ref: ${{ inputs.backend_branch || 'develop' }}
+          path: 'Back-end'
+
+      - name: Checkout do Repositorio Front-End
+        if: ${{ inputs.action == 'apply' }}
+        uses: actions/checkout@v4
+        with:
+          repository: 'LuminaPI52CCOA/Front-End'
+          ref: ${{ inputs.frontend_branch || 'develop' }}
+          path: 'Front-End'
+
+      - name: Checkout do Repositorio Banco-de-dados
+        if: ${{ inputs.action == 'apply' }}
+        uses: actions/checkout@v4
+        with:
+          repository: 'LuminaPI52CCOA/Banco-de-dados'
+          ref: ${{ inputs.database_branch || 'develop' }}
+          path: 'Banco-de-dados'
+
       - name: Configurar Node.js para Lambda-Alexa
         uses: actions/setup-node@v4
         with:
@@ -73,6 +112,14 @@ jobs:
       - name: Instalar dependencias do Lambda-Alexa (node_modules)
         working-directory: Lambda-Alexa
         run: npm ci --omit=dev || npm install --omit=dev
+
+      - name: Configurar Java 21 para compilação do Back-end
+        if: ${{ inputs.action == 'apply' }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
 
       - name: Configurar estrutura de pastas multi-repo
         run: |
@@ -138,7 +185,52 @@ jobs:
         working-directory: ./environments/${{ inputs.environment }}
         run: terraform init
 
-      - name: Terraform Apply
+      - name: Fase 1 - Terraform Apply ECR (Criação dos Repositórios ECR)
+        if: ${{ inputs.action == 'apply' }}
+        working-directory: ./environments/${{ inputs.environment }}
+        run: terraform apply -target=module.ecr -auto-approve
+
+      - name: Autenticar no Amazon ECR
+        if: ${{ inputs.action == 'apply' }}
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Fase 2 - Build e Push da Imagem Backend para o ECR
+        if: ${{ inputs.action == 'apply' }}
+        run: |
+          echo "Compilando backend Spring Boot (Maven)..."
+          cd Back-end
+          mvn clean package -DskipTests
+          echo "Construindo imagem Docker backend..."
+          docker build -t ${{ steps.login-ecr.outputs.registry }}/lumina-backend:latest .
+          echo "Enviando imagem backend ao ECR..."
+          docker push ${{ steps.login-ecr.outputs.registry }}/lumina-backend:latest
+          cd ..
+
+      - name: Fase 2 - Build e Push da Imagem Frontend para o ECR
+        if: ${{ inputs.action == 'apply' }}
+        run: |
+          echo "Compilando frontend React/Vite..."
+          cd Front-End
+          npm ci
+          npm run build
+          echo "Construindo imagem Docker frontend..."
+          docker build -t ${{ steps.login-ecr.outputs.registry }}/lumina-frontend:latest .
+          echo "Enviando imagem frontend ao ECR..."
+          docker push ${{ steps.login-ecr.outputs.registry }}/lumina-frontend:latest
+          cd ..
+
+      - name: Fase 2 - Build e Push da Imagem Banco-de-dados para o ECR
+        if: ${{ inputs.action == 'apply' }}
+        run: |
+          echo "Construindo imagem Docker database..."
+          cd Banco-de-dados
+          docker build -t ${{ steps.login-ecr.outputs.registry }}/lumina-database:latest .
+          echo "Enviando imagem database ao ECR..."
+          docker push ${{ steps.login-ecr.outputs.registry }}/lumina-database:latest
+          cd ..
+
+      - name: Fase 3 - Terraform Apply Completo (EC2s, ALBs, Storage e Telecom)
         if: ${{ inputs.action == 'apply' }}
         working-directory: ./environments/${{ inputs.environment }}
         run: terraform apply -auto-approve

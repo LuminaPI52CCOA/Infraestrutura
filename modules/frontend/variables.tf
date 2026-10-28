@@ -66,3 +66,15 @@ variable "target_group_arns" {
   type        = list(string)
   default     = []
 }
+
+variable "aws_region" {
+  description = "Regiao da AWS onde os recursos residem"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "ecr_image_url" {
+  description = "URL completa da imagem Docker no ECR (ex: account.dkr.ecr.region.amazonaws.com/lumina-frontend:latest)"
+  type        = string
+  default     = ""
+}
