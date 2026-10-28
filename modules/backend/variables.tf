@@ -144,3 +144,14 @@ variable "s3_bucket_name" {
   default     = "lumina-storage"
 }
 
+variable "s3_bronze_bucket_name" {
+  description = "Nome do bucket S3 Bronze para logs e telemetria"
+  type        = string
+  default     = "lumina-bronze"
+}
+
+variable "ecr_image_url" {
+  description = "URL completa da imagem Docker no ECR (ex: account.dkr.ecr.region.amazonaws.com/lumina-backend:latest)"
+  type        = string
+  default     = ""
+}

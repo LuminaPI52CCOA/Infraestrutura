@@ -17,6 +17,12 @@ module "network" {
   enable_internal_alb = false
 }
 
+module "ecr" {
+  source       = "../../modules/ecr"
+  project_name = var.project_name
+  environment  = "dev"
+}
+
 module "database" {
   source                      = "../../modules/database"
   project_name                = var.project_name
@@ -32,6 +38,7 @@ module "database" {
   db_repo_url                 = var.db_repo_url
   db_repo_branch              = var.db_repo_branch
   associate_public_ip_address = true
+  ecr_image_url               = "${module.ecr.database_repository_url}:latest"
 }
 
 module "s3_storage" {
@@ -63,6 +70,8 @@ module "backend" {
   backend_repo_url        = var.backend_repo_url
   backend_repo_branch     = var.backend_repo_branch
   s3_bucket_name          = module.s3_storage.bucket_name
+  s3_bronze_bucket_name   = "lumina-bronze"
+  ecr_image_url           = "${module.ecr.backend_repository_url}:latest"
 }
 
 module "frontend" {
@@ -78,6 +87,7 @@ module "frontend" {
   frontend_repo_url    = var.frontend_repo_url
   frontend_repo_branch = var.frontend_repo_branch
   target_group_arns    = [module.network.alb_public_tg_frontend_arn]
+  ecr_image_url        = "${module.ecr.frontend_repository_url}:latest"
 }
 
 module "alexa" {

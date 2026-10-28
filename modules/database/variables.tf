@@ -80,3 +80,15 @@ variable "associate_public_ip_address" {
   type        = bool
   default     = false
 }
+
+variable "aws_region" {
+  description = "Regiao da AWS onde os recursos residem"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "ecr_image_url" {
+  description = "URL completa da imagem Docker no ECR (ex: account.dkr.ecr.region.amazonaws.com/lumina-database:latest)"
+  type        = string
+  default     = ""
+}

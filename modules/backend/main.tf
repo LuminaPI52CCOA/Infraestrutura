@@ -13,8 +13,14 @@ data "aws_ami" "ubuntu" {
   }
 }
 
+data "aws_caller_identity" "current" {}
+
 data "aws_iam_instance_profile" "lab_profile" {
   name = var.lab_instance_profile_name
+}
+
+locals {
+  backend_image = var.ecr_image_url != "" ? var.ecr_image_url : "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/lumina-backend:latest"
 }
 
 resource "aws_instance" "backend" {
@@ -35,87 +41,217 @@ resource "aws_instance" "backend" {
 
               exec > >(tee -a /var/log/backend-provision.log) 2>&1
 
-              # Criar swapfile de 2GB para estabilidade do build Maven
-              if ! swapon --show | grep -q "/swapfile"; then
-                fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048
-                chmod 600 /swapfile
-                mkswap /swapfile
-                swapon /swapfile
-                echo '/swapfile none swap sw 0 0' >> /etc/fstab
-              fi
+              # 1. Instalar dependencias basicas, Docker Engine e Docker Compose
+              apt-get update -y
+              apt-get install -y ca-certificates curl gnupg jq awscli
+
+              install -m 0755 -d /etc/apt/keyrings
+              curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg --yes
+              chmod a+r /etc/apt/keyrings/docker.gpg
+
+              echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
 
               apt-get update -y
-              apt-get install -y git openjdk-21-jdk maven
+              apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-              # Clonar repositorio Back-end
+              systemctl enable docker
+              systemctl start docker
+
               mkdir -p /opt/lumina-backend
-              git clone --depth 1 -b ${var.backend_repo_branch} ${var.backend_repo_url} /opt/lumina-backend || git clone --depth 1 ${var.backend_repo_url} /opt/lumina-backend
-
-              # Configurar application.properties dinamicamente (Lumina case-sensitive)
-              mkdir -p /opt/lumina-backend/src/main/resources
-              cat << 'PROPS' > /opt/lumina-backend/src/main/resources/application.properties
-              server.port=8080
-              spring.application.name=lumina-backend
-
-              # Configuracao DataSource MySQL
-              spring.datasource.url=jdbc:mysql://${var.db_private_ip}:3306/${var.db_name}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=America/Sao_Paulo
-              spring.datasource.username=${var.db_user}
-              spring.datasource.password=${var.db_password}
-              spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
-
-              # JPA e Hibernate
-              spring.jpa.hibernate.ddl-auto=update
-              spring.jpa.show-sql=false
-              spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQLDialect
-
-              # Seguranca JWT
-              jwt.secret=${var.jwt_secret}
-              jwt.validity=${var.jwt_validity}
-
-              # Google Gemini AI
-              gemini.api.key=${var.gemini_api_key}
-
-              # Alexa LWA & Reminders
-              alexa.lwa.client-id=${var.alexa_lwa_client_id}
-              alexa.lwa.client-secret=${var.alexa_lwa_client_secret}
-              alexa.reminders.enabled=${var.alexa_reminders_enabled}
-
-              # AWS S3 Midias Clinicas
-              aws.region=${var.aws_region}
-              aws.s3.bucket-name=${var.s3_bucket_name}
-
-              # Actuator Health Check
-              management.endpoints.web.exposure.include=*
-              management.endpoint.health.show-details=always
-              PROPS
-
-              # Compilar e empacotar aplicacao Spring Boot
               cd /opt/lumina-backend
-              mvn clean package -DskipTests
 
-              # Criar servico systemd lumina-backend
-              cat << 'SERVICE' > /etc/systemd/system/lumina-backend.service
+              # 2. Escrever arquivo de variaveis .env (com permissao restrita)
+              cat << 'ENV' > /opt/lumina-backend/.env
+              SPRING_DATASOURCE_URL=jdbc:mysql://${var.db_private_ip}:3306/${var.db_name}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=America/Sao_Paulo
+              SPRING_DATASOURCE_USERNAME=${var.db_user}
+              SPRING_DATASOURCE_PASSWORD=${var.db_password}
+              JWT_SECRET=${var.jwt_secret}
+              JWT_VALIDITY=${var.jwt_validity}
+              GEMINI_API_KEY=${var.gemini_api_key}
+              ALEXA_LWA_CLIENT_ID=${var.alexa_lwa_client_id}
+              ALEXA_LWA_CLIENT_SECRET=${var.alexa_lwa_client_secret}
+              AWS_REGION=${var.aws_region}
+              AWS_S3_BUCKET_NAME=${var.s3_bucket_name}
+              BUCKET_BRONZE=${var.s3_bronze_bucket_name}
+              ENVIRONMENT=${var.environment}
+              ENV
+              chmod 600 /opt/lumina-backend/.env
+
+              # 3. Configuracao do Fluent Bit (fluent-bit.conf e parsers.conf)
+              cat << 'FBCONF' > /opt/lumina-backend/fluent-bit.conf
+              [SERVICE]
+                  Flush        1
+                  Daemon       Off
+                  Log_Level    info
+                  Parsers_File parsers.conf
+                  HTTP_Server  On
+                  HTTP_Listen  0.0.0.0
+                  HTTP_Port    2020
+                  Storage.path /tmp/fluent-bit/storage
+                  Storage.sync normal
+
+              [INPUT]
+                  Name             tail
+                  Tag              containers.docker
+                  Path             /var/lib/docker/containers/*/*.log,/var/log/containers/*.log
+                  Parser           docker
+                  Mem_Buf_Limit    10MB
+                  Refresh_Interval 5
+                  Skip_Long_Lines  On
+                  DB               /tmp/fluent-bit/tail-containers.db
+
+              [INPUT]
+                  Name             tail
+                  Tag              app.backend
+                  Path             /var/log/backend/*.log
+                  Parser           spring_boot
+                  Mem_Buf_Limit    10MB
+                  Refresh_Interval 5
+                  DB               /tmp/fluent-bit/tail-backend.db
+
+              [FILTER]
+                  Name         record_modifier
+                  Match        *
+                  Record       project lumina
+                  Record       tier bronze
+                  Record       environment ${var.environment}
+
+              [OUTPUT]
+                  Name            s3
+                  Match           containers.*
+                  region          ${var.aws_region}
+                  bucket          ${var.s3_bronze_bucket_name}
+                  total_file_size 10M
+                  upload_timeout  1m
+                  use_put_object  On
+                  compression     gzip
+                  s3_key_format   /logs/containers/%Y/%m/%d/$TAG-$UUID.json.gz
+                  store_dir       /tmp/fluent-bit/s3
+
+              [OUTPUT]
+                  Name            s3
+                  Match           app.backend
+                  region          ${var.aws_region}
+                  bucket          ${var.s3_bronze_bucket_name}
+                  total_file_size 10M
+                  upload_timeout  1m
+                  use_put_object  On
+                  compression     gzip
+                  s3_key_format   /logs/backend/%Y/%m/%d/$TAG-$UUID.json.gz
+                  store_dir       /tmp/fluent-bit/s3
+
+              [OUTPUT]
+                  Name            stdout
+                  Match           *
+                  Format          json_lines
+              FBCONF
+
+              cat << 'PARSERS' > /opt/lumina-backend/parsers.conf
+              [PARSER]
+                  Name        json
+                  Format      json
+                  Time_Key    time
+                  Time_Format %Y-%m-%dT%H:%M:%S.%L
+                  Time_Keep   On
+
+              [PARSER]
+                  Name        docker
+                  Format      json
+                  Time_Key    time
+                  Time_Format %Y-%m-%dT%H:%M:%S.%L%z
+                  Time_Keep   On
+
+              [PARSER]
+                  Name        spring_boot
+                  Format      regex
+                  Regex       ^(?<time>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}(?:Z|[+-]\d{2}:\d{2}))\s+(?<level>[A-Z]+)\s+(?<pid>\d+)\s+---\s+\[(?<service>[^\]]*)\]\s+\[(?<thread>[^\]]*)\]\s+(?<logger>[^\s]+)\s*:\s*(?<message>.*)$
+              PARSERS
+
+              # 4. Criar docker-compose.yml
+              cat << 'COMPOSE' > /opt/lumina-backend/docker-compose.yml
+              services:
+                backend:
+                  image: ${local.backend_image}
+                  container_name: lumina-backend
+                  restart: unless-stopped
+                  env_file: .env
+                  ports:
+                    - "8080:8080"
+                  volumes:
+                    - backend_logs:/var/log/backend
+                  environment:
+                    - LOGGING_FILE_NAME=/var/log/backend/app.log
+                    - LOGGING_PATTERN_FILE=%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level %pid --- [%t] %-40.40logger{39} : %m%n
+
+                fluent-bit:
+                  image: fluent/fluent-bit:latest
+                  container_name: lumina-fluent-bit
+                  restart: unless-stopped
+                  depends_on:
+                    - backend
+                  environment:
+                    - AWS_REGION=${var.aws_region}
+                    - BUCKET_BRONZE=${var.s3_bronze_bucket_name}
+                    - ENVIRONMENT=${var.environment}
+                  ports:
+                    - "2020:2020"
+                  volumes:
+                    - ./fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+                    - ./parsers.conf:/fluent-bit/etc/parsers.conf:ro
+                    - backend_logs:/var/log/backend:ro
+                    - /var/lib/docker/containers:/var/lib/docker/containers:ro
+                    - /var/run/docker.sock:/var/run/docker.sock:ro
+
+                watchtower:
+                  image: containrrr/watchtower:latest
+                  container_name: lumina-watchtower
+                  restart: unless-stopped
+                  environment:
+                    - AWS_REGION=${var.aws_region}
+                    - WATCHTOWER_POLL_INTERVAL=20
+                    - WATCHTOWER_CLEANUP=true
+                    - WATCHTOWER_ROLLING_RESTART=true
+                  volumes:
+                    - /var/run/docker.sock:/var/run/docker.sock
+
+              volumes:
+                backend_logs:
+              COMPOSE
+
+              # 5. Autenticar no Amazon ECR via IMDSv2 / LabRole
+              TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" || true)
+              if [ -n "$TOKEN" ]; then
+                REGION=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/placement/region)
+                ACCOUNT_ID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r .accountId)
+              else
+                REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
+                ACCOUNT_ID=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r .accountId)
+              fi
+
+              aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $${ACCOUNT_ID}.dkr.ecr.$${REGION}.amazonaws.com || true
+
+              # 6. Criar servico systemd lumina-docker para resiliencia no boot
+              cat << 'SERVICE' > /etc/systemd/system/lumina-docker.service
               [Unit]
-              Description=Lumina Backend Spring Boot API
-              After=syslog.target network.target
+              Description=Lumina Backend Docker Compose Application
+              Requires=docker.service
+              After=docker.service network-online.target
 
               [Service]
-              Type=simple
-              User=root
+              Type=oneshot
+              RemainAfterExit=yes
               WorkingDirectory=/opt/lumina-backend
-              ExecStart=/usr/bin/java -jar /opt/lumina-backend/target/backend-0.0.1-SNAPSHOT.jar
-              Restart=always
-              RestartSec=10
-              StandardOutput=journal
-              StandardError=journal
+              ExecStart=/usr/bin/docker compose up -d
+              ExecStop=/usr/bin/docker compose down
+              TimeoutStartSec=0
 
               [Install]
               WantedBy=multi-user.target
               SERVICE
 
               systemctl daemon-reload
-              systemctl enable lumina-backend
-              systemctl start lumina-backend
+              systemctl enable lumina-docker
+              systemctl start lumina-docker
               EOF
 
   tags = {

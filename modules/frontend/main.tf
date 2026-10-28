@@ -13,8 +13,14 @@ data "aws_ami" "ubuntu" {
   }
 }
 
+data "aws_caller_identity" "current" {}
+
 data "aws_iam_instance_profile" "lab_profile" {
   name = var.lab_instance_profile_name
+}
+
+locals {
+  frontend_image = var.ecr_image_url != "" ? var.ecr_image_url : "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/lumina-frontend:latest"
 }
 
 resource "aws_instance" "frontend" {
@@ -35,46 +41,33 @@ resource "aws_instance" "frontend" {
 
               exec > >(tee -a /var/log/frontend-provision.log) 2>&1
 
-              # Criar swapfile de 2GB para estabilidade do build Vite em t3.micro
-              if ! swapon --show | grep -q "/swapfile"; then
-                fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048
-                chmod 600 /swapfile
-                mkswap /swapfile
-                swapon /swapfile
-                echo '/swapfile none swap sw 0 0' >> /etc/fstab
-              fi
+              # 1. Instalar dependencias basicas, Docker Engine e Docker Compose
+              apt-get update -y
+              apt-get install -y ca-certificates curl gnupg jq awscli
+
+              install -m 0755 -d /etc/apt/keyrings
+              curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg --yes
+              chmod a+r /etc/apt/keyrings/docker.gpg
+
+              echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
 
               apt-get update -y
-              apt-get install -y curl ca-certificates gnupg git nginx
+              apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-              # Pagina temporaria para passar imediatamente no ALB Health Check
-              rm -f /etc/nginx/sites-enabled/default /etc/nginx/sites-available/default /etc/nginx/conf.d/default.conf
-              mkdir -p /var/www/html
-              cat << 'HTML' > /var/www/html/index.html
-              <!DOCTYPE html>
-              <html>
-              <head><meta charset="utf-8"><title>Lumina - Inicializando</title></head>
-              <body style="font-family:sans-serif;text-align:center;padding:50px;background:#0f172a;color:#f8fafc;">
-                <h1>⚡ Lumina - Inicializando Frontend</h1>
-                <p>O bundle React / Vite está sendo construído e configurado no NGINX. Aguarde alguns instantes e atualize a página.</p>
-              </body>
-              </html>
-              HTML
+              systemctl enable docker
+              systemctl start docker
 
-              # Configuracao do NGINX com Proxy Reverso Completo (INCLUINDO /alexa)
-              cat << 'CONF' > /etc/nginx/sites-available/lumina-frontend.conf
+              mkdir -p /opt/lumina-frontend
+              cd /opt/lumina-frontend
+
+              # 2. Configuracao do NGINX com Proxy Reverso Completo apontando para o backend
+              cat << 'CONF' > /opt/lumina-frontend/nginx.conf
               server {
                   listen 80 default_server;
                   server_name _;
-                  root /var/www/html;
-                  index index.html;
-
-                  location / {
-                      try_files $uri $uri/ /index.html;
-                  }
 
                   # Proxy reverso para APIs e Alexa Skills
-                  location ~ ^/(tipos-midia|alexa|usuarios|clientes|consultas|convenios|anamnese|anamneses|perfis|swagger-ui|v3|actuator|api) {
+                  location ~ ^/(tipos-midia|alexa|usuarios|clientes|consultas|convenios|anamnese|anamneses|perfis|especialidades|swagger-ui|v3|actuator|api) {
                       proxy_pass http://${var.backend_endpoint}:8080;
                       proxy_http_version 1.1;
                       proxy_set_header Host $host;
@@ -84,52 +77,75 @@ resource "aws_instance" "frontend" {
                       proxy_connect_timeout 60s;
                       proxy_read_timeout 60s;
                   }
+
+                  # Tratamento para SPA React
+                  location / {
+                      root /usr/share/nginx/html;
+                      index index.html;
+                      try_files $uri $uri/ /index.html;
+                  }
               }
               CONF
 
-              ln -sf /etc/nginx/sites-available/lumina-frontend.conf /etc/nginx/sites-enabled/lumina-frontend.conf
-              nginx -t
-              systemctl enable nginx
-              systemctl restart nginx
+              # 3. Criar docker-compose.yml
+              cat << 'COMPOSE' > /opt/lumina-frontend/docker-compose.yml
+              services:
+                frontend:
+                  image: ${local.frontend_image}
+                  container_name: lumina-frontend
+                  restart: unless-stopped
+                  ports:
+                    - "80:80"
+                  volumes:
+                    - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
 
-              # Instalar Node.js 20 LTS oficial
-              curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-              apt-get install -y nodejs
+                watchtower:
+                  image: containrrr/watchtower:latest
+                  container_name: lumina-frontend-watchtower
+                  restart: unless-stopped
+                  environment:
+                    - AWS_REGION=${var.aws_region}
+                    - WATCHTOWER_POLL_INTERVAL=20
+                    - WATCHTOWER_CLEANUP=true
+                    - WATCHTOWER_ROLLING_RESTART=true
+                  volumes:
+                    - /var/run/docker.sock:/var/run/docker.sock
+              COMPOSE
 
-              # Clonar repositorio Front-End
-              rm -rf /opt/lumina-frontend
-              mkdir -p /opt/lumina-frontend
-              git clone --depth 1 -b ${var.frontend_repo_branch} ${var.frontend_repo_url} /opt/lumina-frontend || git clone --depth 1 ${var.frontend_repo_url} /opt/lumina-frontend
-
-              # Ajustar API_BASE_URL para caminhos relativos
-              cd /opt/lumina-frontend
-              sed -i "s|export const API_BASE_URL = .*;|export const API_BASE_URL = '';|g" src/api/config.js 2>/dev/null || true
-
-              # Build estatico Vite
-              npm install --legacy-peer-deps react-is || npm install --legacy-peer-deps
-              if npm run build; then
-                # Copiar bundle para o diretorio web do NGINX
-                rm -rf /var/www/html/*
-                cp -r dist/* /var/www/html/
-                chown -R www-data:www-data /var/www/html
-                chmod -R 755 /var/www/html
-                systemctl reload nginx
-                echo "Frontend React/Vite implantado com sucesso!"
+              # 4. Autenticar no Amazon ECR via IMDSv2 / LabRole
+              TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" || true)
+              if [ -n "$TOKEN" ]; then
+                REGION=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/placement/region)
+                ACCOUNT_ID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r .accountId)
               else
-                echo "Falha no build do Vite! Gerando pagina de erro informativa."
-                cat << 'ERRHTML' > /var/www/html/index.html
-              <!DOCTYPE html>
-              <html>
-              <head><meta charset="utf-8"><title>Lumina - Erro no Build</title></head>
-              <body style="font-family:sans-serif;text-align:center;padding:50px;background:#0f172a;color:#f87171;">
-                <h1>❌ Erro na Compilação do Frontend</h1>
-                <p style="color:#cbd5e1;">Ocorreu uma falha durante o <code>npm run build</code>. Verifique <code>/var/log/frontend-provision.log</code> na instância EC2.</p>
-              </body>
-              </html>
-              ERRHTML
-                systemctl reload nginx
-                exit 1
+                REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
+                ACCOUNT_ID=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r .accountId)
               fi
+
+              aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $${ACCOUNT_ID}.dkr.ecr.$${REGION}.amazonaws.com || true
+
+              # 5. Criar servico systemd lumina-docker para resiliencia no boot
+              cat << 'SERVICE' > /etc/systemd/system/lumina-docker.service
+              [Unit]
+              Description=Lumina Frontend Docker Compose Application
+              Requires=docker.service
+              After=docker.service network-online.target
+
+              [Service]
+              Type=oneshot
+              RemainAfterExit=yes
+              WorkingDirectory=/opt/lumina-frontend
+              ExecStart=/usr/bin/docker compose up -d
+              ExecStop=/usr/bin/docker compose down
+              TimeoutStartSec=0
+
+              [Install]
+              WantedBy=multi-user.target
+              SERVICE
+
+              systemctl daemon-reload
+              systemctl enable lumina-docker
+              systemctl start lumina-docker
               EOF
 
   tags = {
