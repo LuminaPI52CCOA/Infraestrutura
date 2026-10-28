@@ -22,21 +22,14 @@ on:
         required: false
         type: boolean
         default: false
-      backend_branch:
-        description: "Branch do Back-end a compilar para o ECR"
-        required: false
+      app_branch:
+        description: "Branch das aplicacoes (Back-end, Front-End e Banco-de-dados)"
+        required: true
+        type: choice
         default: "develop"
-        type: string
-      frontend_branch:
-        description: "Branch do Front-End a compilar para o ECR"
-        required: false
-        default: "develop"
-        type: string
-      database_branch:
-        description: "Branch do Banco-de-dados a compilar para o ECR"
-        required: false
-        default: "develop"
-        type: string
+        options:
+          - "develop"
+          - "main"
       aws_access_key_id:
         description: "AWS Access Key ID (Sessao temporaria do Learner Lab)"
         required: true
@@ -85,7 +78,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: 'LuminaPI52CCOA/Back-end'
-          ref: ${{ inputs.backend_branch || 'develop' }}
+          ref: ${{ inputs.app_branch }}
           path: 'Back-end'
 
       - name: Checkout do Repositorio Front-End
@@ -93,15 +86,25 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: 'LuminaPI52CCOA/Front-End'
-          ref: ${{ inputs.frontend_branch || 'develop' }}
+          ref: ${{ inputs.app_branch }}
           path: 'Front-End'
 
       - name: Checkout do Repositorio Banco-de-dados
+        id: checkout-db
         if: ${{ inputs.action == 'apply' }}
         uses: actions/checkout@v4
         with:
           repository: 'LuminaPI52CCOA/Banco-de-dados'
-          ref: ${{ inputs.database_branch || 'develop' }}
+          ref: ${{ inputs.app_branch }}
+          path: 'Banco-de-dados'
+        continue-on-error: true
+
+      - name: Fallback Checkout Banco-de-dados (se a branch selecionada nao existir no banco)
+        if: ${{ inputs.action == 'apply' && steps.checkout-db.outcome != 'success' }}
+        uses: actions/checkout@v4
+        with:
+          repository: 'LuminaPI52CCOA/Banco-de-dados'
+          ref: 'main'
           path: 'Banco-de-dados'
 
       - name: Configurar Node.js para Lambda-Alexa
