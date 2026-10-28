@@ -188,6 +188,21 @@ jobs:
         working-directory: ./environments/${{ inputs.environment }}
         run: terraform init
 
+      - name: Limpar Stacks CloudFormation com Falha Prévia (ROLLBACK_COMPLETE)
+        if: ${{ inputs.action == 'apply' }}
+        run: |
+          echo "Verificando se existem stacks CloudFormation em ROLLBACK_COMPLETE..."
+          FAILED_STACKS=$(aws cloudformation list-stacks --stack-status-filter ROLLBACK_COMPLETE --query "StackSummaries[].StackName" --output text 2>/dev/null || true)
+          if [ -n "$FAILED_STACKS" ] && [ "$FAILED_STACKS" != "None" ]; then
+            for STACK in $FAILED_STACKS; do
+              echo "Deletando stack morta $STACK para permitir recriação limpa pelo Terraform..."
+              aws cloudformation delete-stack --stack-name "$STACK"
+              aws cloudformation wait stack-delete-complete --stack-name "$STACK" 2>/dev/null || true
+            done
+          else
+            echo "Nenhuma stack em ROLLBACK_COMPLETE encontrada."
+          fi
+
       - name: Fase 1 - Terraform Apply ECR (Criação dos Repositórios ECR)
         if: ${{ inputs.action == 'apply' }}
         working-directory: ./environments/${{ inputs.environment }}
