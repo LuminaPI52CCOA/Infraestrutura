@@ -22,7 +22,7 @@ resource "aws_ecr_lifecycle_policy" "lumina_cleanup" {
       {
         rulePriority = 1
         description  = "Manter apenas 1 imagem com tag para economizar espaco no lab"
-        selection    = {
+        selection = {
           tagStatus   = "any"
           countType   = "imageCountMoreThan"
           countNumber = 1
