@@ -152,10 +152,13 @@ jobs:
           aws-session-token: ${{ inputs.aws_session_token }}
           aws-region: "us-east-1"
 
-      - name: Restaurar Terraform State (Persistência entre Execuções)
+      - name: Restaurar Terraform State (Persistência por Conta AWS)
         run: |
+          CURRENT_ACCOUNT=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "")
+          echo "Conta AWS autenticada: $CURRENT_ACCOUNT"
+
           if [ "${{ inputs.reset_state }}" = "true" ]; then
-            echo "Opcao reset_state ativada. Ignorando e descartando state previo para ${{ inputs.environment }}."
+            echo "Opcao reset_state ativada. Descartando state prévio para ${{ inputs.environment }}."
             rm -f ./environments/${{ inputs.environment }}/terraform.tfstate*
             exit 0
           fi
@@ -163,25 +166,32 @@ jobs:
           mkdir -p /tmp/tfstate-repo
           git clone --depth 1 -b terraform-states https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git /tmp/tfstate-repo 2>/dev/null || true
           
-          STATE_FILE="/tmp/tfstate-repo/environments/${{ inputs.environment }}/terraform.tfstate"
-          if [ -f "$STATE_FILE" ]; then
-            CURRENT_ACCOUNT=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "")
-            STATE_ACCOUNTS=$(grep -o -E 'arn:aws:[^:]+:[^:]+:([0-9]{12})' "$STATE_FILE" 2>/dev/null | awk -F: '{print $5}' | sort -u | grep -v '^$' || true)
+          ACCOUNT_STATE_FILE="/tmp/tfstate-repo/environments/${{ inputs.environment }}/${CURRENT_ACCOUNT}/terraform.tfstate"
+          LEGACY_STATE_FILE="/tmp/tfstate-repo/environments/${{ inputs.environment }}/terraform.tfstate"
 
+          if [ -n "$CURRENT_ACCOUNT" ] && [ -f "$ACCOUNT_STATE_FILE" ]; then
+            echo "Encontrado estado isolado para a conta $CURRENT_ACCOUNT em ${{ inputs.environment }}. Restaurando..."
+            cp /tmp/tfstate-repo/environments/${{ inputs.environment }}/${CURRENT_ACCOUNT}/terraform.tfstate* ./environments/${{ inputs.environment }}/
+          elif [ -f "$LEGACY_STATE_FILE" ]; then
+            STATE_ACCOUNTS=$(grep -o -E 'arn:aws:[^:]+:[^:]+:([0-9]{12})' "$LEGACY_STATE_FILE" 2>/dev/null | awk -F: '{print $5}' | sort -u | grep -v '^$' || true)
+            MATCH=true
             if [ -n "$CURRENT_ACCOUNT" ] && [ -n "$STATE_ACCOUNTS" ]; then
               for ACC in $STATE_ACCOUNTS; do
                 if [ "$ACC" != "$CURRENT_ACCOUNT" ]; then
-                  echo "::warning:: Conflito de conta detectado! O state anterior pertence a conta $ACC, mas as credenciais atuais sao da conta $CURRENT_ACCOUNT. Descartando state anterior para evitar conflito de ARNs no Learner Lab."
-                  rm -f ./environments/${{ inputs.environment }}/terraform.tfstate*
-                  exit 0
+                  MATCH=false
+                  break
                 fi
               done
             fi
 
-            echo "Encontrado estado anterior para ${{ inputs.environment }}. Restaurando..."
-            cp /tmp/tfstate-repo/environments/${{ inputs.environment }}/terraform.tfstate* ./environments/${{ inputs.environment }}/
+            if [ "$MATCH" = "true" ]; then
+              echo "Encontrado estado prévio compatível com a conta $CURRENT_ACCOUNT. Restaurando..."
+              cp /tmp/tfstate-repo/environments/${{ inputs.environment }}/terraform.tfstate* ./environments/${{ inputs.environment }}/
+            else
+              echo "::warning:: O estado legado na raiz pertence a outra conta ($STATE_ACCOUNTS). Iniciando com state novo para a conta $CURRENT_ACCOUNT sem sobrescrever a conta anterior."
+            fi
           else
-            echo "Nenhum arquivo terraform.tfstate previo encontrado para ${{ inputs.environment }}."
+            echo "Nenhum arquivo terraform.tfstate prévio encontrado para a conta $CURRENT_ACCOUNT em ${{ inputs.environment }}."
           fi
 
       - name: Terraform Init
@@ -253,10 +263,89 @@ jobs:
         working-directory: ./environments/${{ inputs.environment }}
         run: terraform apply -auto-approve
 
+      - name: Pré-Destroy - Esvaziar Buckets S3 e Imagens ECR
+        if: ${{ inputs.action == 'destroy' }}
+        run: |
+          echo "=== Preparando recursos para Destroy Limpo ==="
+          CURRENT_ACCOUNT=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "")
+
+          echo "Esvaziando buckets S3 da conta $CURRENT_ACCOUNT..."
+          BUCKETS=$(aws s3api list-buckets --query "Buckets[?contains(Name, 'lumina')].Name" --output text 2>/dev/null || true)
+          for B in $BUCKETS; do
+            if [ -n "$B" ] && [ "$B" != "None" ]; then
+              echo "Esvaziando bucket s3://$B..."
+              aws s3 rm "s3://$B" --recursive 2>/dev/null || true
+            fi
+          done
+
+          echo "Esvaziando imagens de repositórios ECR..."
+          REPOS=$(aws ecr describe-repositories --query "repositories[?contains(repositoryName, 'lumina')].repositoryName" --output text 2>/dev/null || true)
+          for R in $REPOS; do
+            if [ -n "$R" ] && [ "$R" != "None" ]; then
+              IMAGES=$(aws ecr list-images --repository-name "$R" --query 'imageIds[*]' --output json 2>/dev/null || true)
+              if [ -n "$IMAGES" ] && [ "$IMAGES" != "[]" ] && [ "$IMAGES" != "None" ]; then
+                echo "Removendo imagens do repositório $R..."
+                aws ecr batch-delete-image --repository-name "$R" --image-ids "$IMAGES" 2>/dev/null || true
+              fi
+            fi
+          done
+
       - name: Terraform Destroy
         if: ${{ inputs.action == 'destroy' }}
         working-directory: ./environments/${{ inputs.environment }}
-        run: terraform destroy -auto-approve
+        run: terraform destroy -auto-approve || true
+
+      - name: Pós-Destroy - Limpeza Garantida de Recursos Órfãos
+        if: ${{ inputs.action == 'destroy' }}
+        run: |
+          echo "=== Verificando e limpando recursos órfãos residuais ==="
+
+          # 1. Terminar instâncias EC2 residuais do projeto Lumina
+          INSTANCES=$(aws ec2 describe-instances --filters "Name=tag:Project,Values=lumina" "Name=instance-state-name,Values=running,pending,stopped" --query "Reservations[].Instances[].InstanceId" --output text 2>/dev/null || true)
+          if [ -n "$INSTANCES" ] && [ "$INSTANCES" != "None" ]; then
+            echo "Encerrando instâncias EC2 residuais: $INSTANCES"
+            aws ec2 terminate-instances --instance-ids $INSTANCES 2>/dev/null || true
+            aws ec2 wait instance-terminated --instance-ids $INSTANCES 2>/dev/null || true
+          fi
+
+          # 2. Deletar Load Balancer órfão
+          ALB_ARNS=$(aws elbv2 describe-load-balancers --query "LoadBalancers[?contains(LoadBalancerName, 'lumina')].LoadBalancerArn" --output text 2>/dev/null || true)
+          for A in $ALB_ARNS; do
+            if [ -n "$A" ] && [ "$A" != "None" ]; then
+              echo "Deletando ALB residual: $A..."
+              aws elbv2 delete-load-balancer --load-balancer-arn "$A" 2>/dev/null || true
+            fi
+          done
+
+          # 3. Deletar Target Groups órfãos
+          TG_ARNS=$(aws elbv2 describe-target-groups --query "TargetGroups[?contains(TargetGroupName, 'lumina')].TargetGroupArn" --output text 2>/dev/null || true)
+          for T in $TG_ARNS; do
+            if [ -n "$T" ] && [ "$T" != "None" ]; then
+              echo "Deletando Target Group residual: $T..."
+              aws elbv2 delete-target-group --target-group-arn "$T" 2>/dev/null || true
+            fi
+          done
+
+          # 4. Deletar KeyPair órfão
+          if aws ec2 describe-key-pairs --key-names lumina-deploy-key >/dev/null 2>&1; then
+            echo "Deletando KeyPair lumina-deploy-key..."
+            aws ec2 delete-key-pair --key-name lumina-deploy-key 2>/dev/null || true
+          fi
+
+          # 5. Deletar Lambda Alexa residual
+          if aws lambda get-function --function-name lumina-alexa-skill-dev >/dev/null 2>&1; then
+            echo "Deletando Lambda lumina-alexa-skill-dev..."
+            aws lambda delete-function --function-name lumina-alexa-skill-dev 2>/dev/null || true
+          fi
+
+          # 6. Deletar stacks CloudFormation de S3 residuais
+          CF_STACKS=$(aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE ROLLBACK_COMPLETE DELETE_FAILED --query "StackSummaries[?starts_with(StackName, 'cf-s3-lumina')].StackName" --output text 2>/dev/null || true)
+          for S in $CF_STACKS; do
+            if [ -n "$S" ] && [ "$S" != "None" ]; then
+              echo "Deletando stack CloudFormation S3: $S..."
+              aws cloudformation delete-stack --stack-name "$S" 2>/dev/null || true
+            fi
+          done
 
       - name: Diagnostico de Falhas CloudFormation
         if: failure()
@@ -275,8 +364,9 @@ jobs:
       - name: Persistir Terraform State (Branch terraform-states)
         if: always()
         run: |
+          CURRENT_ACCOUNT=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "")
           if [ -f "./environments/${{ inputs.environment }}/terraform.tfstate" ]; then
-            echo "Persistindo estado atualizado de ${{ inputs.environment }} na branch terraform-states..."
+            echo "Persistindo estado atualizado de ${{ inputs.environment }} (Conta: $CURRENT_ACCOUNT) na branch terraform-states..."
             rm -rf /tmp/tfstate-repo
             git clone --depth 1 -b terraform-states https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git /tmp/tfstate-repo 2>/dev/null || {
               mkdir -p /tmp/tfstate-repo
@@ -286,12 +376,21 @@ jobs:
               git checkout -b terraform-states
             }
             cd /tmp/tfstate-repo
-            mkdir -p environments/${{ inputs.environment }}
-            cp $GITHUB_WORKSPACE/environments/${{ inputs.environment }}/terraform.tfstate* environments/${{ inputs.environment }}/
+            
+            # Salva na pasta da conta do usuário para isolamento multi-aluno
+            if [ -n "$CURRENT_ACCOUNT" ]; then
+              mkdir -p "environments/${{ inputs.environment }}/${CURRENT_ACCOUNT}"
+              cp $GITHUB_WORKSPACE/environments/${{ inputs.environment }}/terraform.tfstate* "environments/${{ inputs.environment }}/${CURRENT_ACCOUNT}/"
+            fi
+
+            # Salva na raiz para manter compatibilidade
+            mkdir -p "environments/${{ inputs.environment }}"
+            cp $GITHUB_WORKSPACE/environments/${{ inputs.environment }}/terraform.tfstate* "environments/${{ inputs.environment }}/"
+
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
             git add environments/${{ inputs.environment }}/
-            git commit -m "chore(terraform): atualiza state de ${{ inputs.environment }} [skip ci]" || echo "Nenhuma alteracao no state."
+            git commit -m "chore(terraform): atualiza state de ${{ inputs.environment }} [conta: ${CURRENT_ACCOUNT:-desconhecida}] [skip ci]" || echo "Nenhuma alteracao no state."
             git pull --rebase origin terraform-states 2>/dev/null || true
             git push origin terraform-states || git push -u origin terraform-states --force || echo "Aviso: Nao foi possivel persistir via git push."
           fi

@@ -39,8 +39,9 @@ module "data_pipeline" {
 # ==============================================================================
 
 resource "aws_athena_database" "logs_db" {
-  name   = "lumina_logs_db"
-  bucket = module.s3_athena_results.bucket_id
+  name          = "lumina_logs_db"
+  bucket        = module.s3_athena_results.bucket_id
+  force_destroy = true
 
   comment = "Banco de dados analitico dedicado a telemetria e logs processados pelo AWS Glue"
 }
