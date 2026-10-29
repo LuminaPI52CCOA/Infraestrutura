@@ -2,6 +2,8 @@
 # Ambiente Dev (Modo Economico - Single-AZ, 3 Instancias, Sem NAT Gateway)
 # ==============================================================================
 
+data "aws_caller_identity" "current" {}
+
 module "keypair" {
   source     = "../../modules/keypair"
   key_name   = var.ssh_key_name
@@ -70,7 +72,7 @@ module "backend" {
   backend_repo_url        = var.backend_repo_url
   backend_repo_branch     = var.backend_repo_branch
   s3_bucket_name          = module.s3_storage.bucket_name
-  s3_bronze_bucket_name   = "lumina-bronze"
+  s3_bronze_bucket_name   = "lumina-sptech-bronze-${data.aws_caller_identity.current.account_id}"
   ecr_image_url           = "${module.ecr.backend_repository_url}:latest"
 }
 

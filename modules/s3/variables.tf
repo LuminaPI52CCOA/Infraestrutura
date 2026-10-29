@@ -3,6 +3,12 @@ variable "bucket_name" {
   description = "Nome base do bucket"
 }
 
+variable "append_account_id" {
+  type        = bool
+  default     = true
+  description = "Anexa automaticamente o ID da conta AWS ao final do nome do bucket para garantir unicidade global"
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

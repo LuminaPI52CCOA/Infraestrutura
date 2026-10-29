@@ -183,23 +183,23 @@ module "alexa" {
 
 module "s3_bronze" {
   source                    = "../../modules/s3"
-  bucket_name               = "lumina-bronze"
+  bucket_name               = "lumina-sptech-bronze"
   enable_event_notification = true
 }
 
 module "s3_silver" {
   source      = "../../modules/s3"
-  bucket_name = "lumina-silver"
+  bucket_name = "lumina-sptech-silver"
 }
 
 module "s3_gold" {
   source      = "../../modules/s3"
-  bucket_name = "lumina-gold"
+  bucket_name = "lumina-sptech-gold"
 }
 
 module "s3_athena_results" {
   source      = "../../modules/s3"
-  bucket_name = "lumina-athena-results"
+  bucket_name = "lumina-sptech-athena-results"
 }
 
 module "data_pipeline" {

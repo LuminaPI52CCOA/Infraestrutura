@@ -1,9 +1,11 @@
+data "aws_caller_identity" "current" {}
+
 locals {
-  bucket_name = var.bucket_name
+  bucket_name = var.append_account_id ? "${var.bucket_name}-${data.aws_caller_identity.current.account_id}" : var.bucket_name
 }
 
 resource "aws_cloudformation_stack" "bucket" {
-  name = "cf-s3-${var.bucket_name}"
+  name = "cf-s3-${local.bucket_name}"
 
   template_body = jsonencode({
     AWSTemplateFormatVersion = "2010-09-09"
