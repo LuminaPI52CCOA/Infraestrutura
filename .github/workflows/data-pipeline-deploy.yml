@@ -118,20 +118,23 @@ jobs:
         run: |
           if [ -f "./environments/data/terraform.tfstate" ]; then
             echo "Persistindo estado atualizado de data na branch terraform-states..."
-            mkdir -p /tmp/tfstate-repo
-            cd /tmp/tfstate-repo
-            if [ ! -d ".git" ]; then
+            rm -rf /tmp/tfstate-repo
+            git clone --depth 1 -b terraform-states https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git /tmp/tfstate-repo 2>/dev/null || {
+              mkdir -p /tmp/tfstate-repo
+              cd /tmp/tfstate-repo
               git init
               git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
               git checkout -b terraform-states
-            fi
+            }
+            cd /tmp/tfstate-repo
             mkdir -p environments/data
             cp $GITHUB_WORKSPACE/environments/data/terraform.tfstate* environments/data/
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add .
+            git add environments/data/
             git commit -m "chore(terraform): atualiza state de data [skip ci]" || echo "Nenhuma alteracao no state."
-            git push -u origin terraform-states --force || echo "Aviso: Nao foi possivel persistir via git push."
+            git pull --rebase origin terraform-states 2>/dev/null || true
+            git push origin terraform-states || git push -u origin terraform-states --force || echo "Aviso: Nao foi possivel persistir via git push."
           fi
 
       - name: Salvar State como Artefato do Workflow
