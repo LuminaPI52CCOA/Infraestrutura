@@ -181,7 +181,7 @@ resource "aws_instance" "backend" {
                     - backend_logs:/var/log/backend
                   environment:
                     - LOGGING_FILE_NAME=/var/log/backend/app.log
-                    - LOGGING_PATTERN_FILE=%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level %pid --- [%t] %-40.40logger{39} : %m%n
+                    - "LOGGING_PATTERN_FILE=%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level %pid --- [%t] %-40.40logger{39} : %m%n"
 
                 fluent-bit:
                   image: fluent/fluent-bit:latest
