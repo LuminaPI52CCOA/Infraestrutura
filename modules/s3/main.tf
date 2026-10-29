@@ -28,8 +28,8 @@ resource "aws_cloudformation_stack" "bucket" {
                   AllowedHeaders = ["*"]
                   AllowedMethods = ["GET", "PUT", "POST", "HEAD"]
                   AllowedOrigins = ["*"]
-                  ExposeHeaders  = ["ETag"]
-                  MaxAgeSeconds  = 3600
+                  ExposedHeaders = ["ETag"]
+                  MaxAge         = 3600
                 }
               ]
             }
