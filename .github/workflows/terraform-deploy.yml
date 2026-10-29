@@ -258,6 +258,20 @@ jobs:
         working-directory: ./environments/${{ inputs.environment }}
         run: terraform destroy -auto-approve
 
+      - name: Diagnostico de Falhas CloudFormation
+        if: failure()
+        run: |
+          echo "=== Diagnosticando Stacks CloudFormation em Falha ==="
+          FAILED_STACKS=$(aws cloudformation list-stacks --stack-status-filter CREATE_FAILED ROLLBACK_IN_PROGRESS ROLLBACK_FAILED ROLLBACK_COMPLETE --query "StackSummaries[].StackName" --output text 2>/dev/null || true)
+          if [ -n "$FAILED_STACKS" ] && [ "$FAILED_STACKS" != "None" ]; then
+            for STACK in $FAILED_STACKS; do
+              echo "--------------------------------------------------------"
+              echo "Eventos de erro da stack: $STACK"
+              echo "--------------------------------------------------------"
+              aws cloudformation describe-stack-events --stack-name "$STACK" --query "StackEvents[?ResourceStatus=='CREATE_FAILED'].[LogicalResourceId, ResourceStatusReason]" --output table || true
+            done
+          fi
+
       - name: Persistir Terraform State (Branch terraform-states)
         if: always()
         run: |

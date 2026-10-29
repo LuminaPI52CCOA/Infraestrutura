@@ -43,7 +43,7 @@ module "database" {
 
 module "s3_storage" {
   source      = "../../modules/s3"
-  bucket_name = "lumina-sptech-storage"
+  bucket_name = "lumina-sptech-storage-prod"
   enable_cors = true
 }
 
