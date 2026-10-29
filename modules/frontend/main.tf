@@ -66,8 +66,20 @@ resource "aws_instance" "frontend" {
                   listen 80 default_server;
                   server_name _;
 
-                  # Proxy reverso para APIs e Alexa Skills
-                  location ~ ^/(tipos-midia|alexa|usuarios|clientes|consultas|convenios|anamnese|anamneses|perfis|especialidades|swagger-ui|v3|actuator|api) {
+                  # Redirecionamento de /api/ para o backend (removendo o prefixo /api/)
+                  location /api/ {
+                      proxy_pass http://${var.backend_endpoint}:8080/;
+                      proxy_http_version 1.1;
+                      proxy_set_header Host $host;
+                      proxy_set_header X-Real-IP $remote_addr;
+                      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                      proxy_set_header X-Forwarded-Proto $scheme;
+                      proxy_connect_timeout 60s;
+                      proxy_read_timeout 60s;
+                  }
+
+                  # Proxy reverso para APIs e Swagger acessados diretamente na raiz
+                  location ~ ^/(tipos-midia|alexa|usuarios|clientes|consultas|convenios|anamnese|anamneses|perfis|especialidades|swagger-ui|v3|actuator) {
                       proxy_pass http://${var.backend_endpoint}:8080;
                       proxy_http_version 1.1;
                       proxy_set_header Host $host;

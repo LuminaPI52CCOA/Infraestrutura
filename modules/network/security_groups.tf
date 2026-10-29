@@ -156,14 +156,6 @@ resource "aws_security_group" "backend" {
   description = "Trafego para a API Spring Boot"
   vpc_id      = aws_vpc.main.id
 
-  ingress {
-    description     = "SSH a partir do Bastion"
-    from_port       = 22
-    to_port         = 22
-    protocol        = "tcp"
-    security_groups = [aws_security_group.bastion.id]
-  }
-
   egress {
     description = "Saida para banco de dados e servicos"
     from_port   = 0
@@ -176,6 +168,16 @@ resource "aws_security_group" "backend" {
     Name        = "${var.project_name}-sg-backend-${var.environment}"
     Environment = var.environment
   }
+}
+
+resource "aws_security_group_rule" "backend_ssh_from_bastion" {
+  type                     = "ingress"
+  from_port                = 22
+  to_port                  = 22
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.bastion.id
+  security_group_id        = aws_security_group.backend.id
+  description              = "SSH a partir do Bastion"
 }
 
 resource "aws_security_group_rule" "backend_from_alb_internal" {
