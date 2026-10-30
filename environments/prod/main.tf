@@ -47,6 +47,17 @@ module "s3_storage" {
   enable_cors = true
 }
 
+module "rabbitmq" {
+  source        = "../../modules/rabbitmq"
+  project_name  = var.project_name
+  environment   = "prod"
+  is_dev        = false
+  vpc_id        = module.network.vpc_id
+  subnet_ids    = module.network.private_app_subnet_ids
+  backend_sg_id = module.network.sg_backend_id
+  ecr_image_url = "${module.ecr.rabbitmq_repository_url}:latest"
+}
+
 module "backend" {
   source                  = "../../modules/backend"
   project_name            = var.project_name
@@ -73,6 +84,9 @@ module "backend" {
   s3_bronze_bucket_name   = module.s3_bronze.bucket_name
   target_group_arns       = [module.network.alb_internal_tg_backend_arn]
   ecr_image_url           = "${module.ecr.backend_repository_url}:latest"
+  rabbitmq_host           = module.rabbitmq.endpoint
+  rabbitmq_port           = module.rabbitmq.port
+  app_public_url          = "http://${module.network.alb_public_dns}"
 }
 
 module "frontend" {
