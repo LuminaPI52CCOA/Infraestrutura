@@ -155,3 +155,34 @@ variable "ecr_image_url" {
   type        = string
   default     = ""
 }
+
+variable "rabbitmq_host" {
+  description = "Host ou endpoint privado do broker RabbitMQ"
+  type        = string
+  default     = "localhost"
+}
+
+variable "rabbitmq_port" {
+  description = "Porta do protocolo AMQP do RabbitMQ"
+  type        = number
+  default     = 5672
+}
+
+variable "rabbitmq_username" {
+  description = "Usuario do RabbitMQ"
+  type        = string
+  default     = "guest"
+}
+
+variable "rabbitmq_password" {
+  description = "Senha do RabbitMQ"
+  type        = string
+  sensitive   = true
+  default     = "guest"
+}
+
+variable "app_public_url" {
+  description = "URL publica da aplicacao frontend/ALB para confirmacao 1-clique"
+  type        = string
+  default     = "http://localhost:5173"
+}

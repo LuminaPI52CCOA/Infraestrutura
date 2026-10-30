@@ -1,7 +1,8 @@
 resource "aws_ecr_repository" "lumina_repos" {
-  for_each             = toset(["lumina-backend", "lumina-frontend", "lumina-database"])
+  for_each             = toset(["lumina-backend", "lumina-frontend", "lumina-database", "lumina-rabbitmq"])
   name                 = each.value
   image_tag_mutability = "MUTABLE"
+  force_delete         = true
 
   image_scanning_configuration {
     scan_on_push = false # Economia de chamadas de API no laboratorio

@@ -17,3 +17,8 @@ output "database_repository_url" {
   description = "URL do repositorio ECR do banco de dados"
   value       = aws_ecr_repository.lumina_repos["lumina-database"].repository_url
 }
+
+output "rabbitmq_repository_url" {
+  description = "URL do repositorio ECR do RabbitMQ"
+  value       = aws_ecr_repository.lumina_repos["lumina-rabbitmq"].repository_url
+}

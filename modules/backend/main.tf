@@ -74,6 +74,11 @@ resource "aws_instance" "backend" {
               AWS_S3_BUCKET_NAME=${var.s3_bucket_name}
               BUCKET_BRONZE=${var.s3_bronze_bucket_name}
               ENVIRONMENT=${var.environment}
+              SPRING_RABBITMQ_HOST=${var.rabbitmq_host}
+              SPRING_RABBITMQ_PORT=${var.rabbitmq_port}
+              SPRING_RABBITMQ_USERNAME=${var.rabbitmq_username}
+              SPRING_RABBITMQ_PASSWORD=${var.rabbitmq_password}
+              APP_PUBLIC_URL=${var.app_public_url}
               ENV
               chmod 600 /opt/lumina-backend/.env
 
