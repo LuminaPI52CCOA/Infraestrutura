@@ -5,6 +5,10 @@ data "aws_iam_role" "lab_role" {
   name = var.lab_role_name
 }
 
+data "aws_vpc" "selected" {
+  id = var.vpc_id
+}
+
 locals {
   image_url = var.ecr_image_url != "" ? var.ecr_image_url : "rabbitmq:3.13-management-alpine"
 }
@@ -17,22 +21,22 @@ resource "aws_security_group" "rabbitmq" {
   description = "Security Group do servico RabbitMQ ECS"
   vpc_id      = var.vpc_id
 
-  # Porta AMQP (5672) liberada para as instancias do backend
+  # Porta AMQP (5672) liberada para a VPC interna (NLB health checks e backend)
   ingress {
-    description     = "AMQP da camada backend"
-    from_port       = 5672
-    to_port         = 5672
-    protocol        = "tcp"
-    security_groups = [var.backend_sg_id]
+    description = "AMQP interno via VPC e Backend"
+    from_port   = 5672
+    to_port     = 5672
+    protocol    = "tcp"
+    cidr_blocks = [data.aws_vpc.selected.cidr_block]
   }
 
-  # Porta Management Dashboard (15672) liberada para a camada backend/interna
+  # Porta Management Dashboard (15672) liberada para a VPC interna
   ingress {
-    description     = "Management UI RabbitMQ"
-    from_port       = 15672
-    to_port         = 15672
-    protocol        = "tcp"
-    security_groups = [var.backend_sg_id]
+    description = "Management UI RabbitMQ"
+    from_port   = 15672
+    to_port     = 15672
+    protocol    = "tcp"
+    cidr_blocks = [data.aws_vpc.selected.cidr_block]
   }
 
   egress {
@@ -51,40 +55,52 @@ resource "aws_security_group" "rabbitmq" {
 }
 
 # ----------------------------------------------------------------------------
-# 2. Namespace Privado de DNS para Service Discovery interno na VPC
+# 2. Network Load Balancer (NLB) Interno para o RabbitMQ
+# Substitui o Route53 / ServiceDiscovery bloqueado pelas SCPs da AWS Academy
 # ----------------------------------------------------------------------------
-resource "aws_service_discovery_private_dns_namespace" "lumina" {
-  name        = "lumina.local"
-  description = "Namespace privado para resolucao de servicos internos ECS"
-  vpc         = var.vpc_id
+resource "aws_lb" "rabbitmq" {
+  name               = "${var.project_name}-nlb-mq-${var.environment}"
+  internal           = true
+  load_balancer_type = "network"
+  subnets            = var.subnet_ids
 
   tags = {
+    Name        = "${var.project_name}-nlb-rabbitmq-${var.environment}"
     Project     = var.project_name
     Environment = var.environment
   }
 }
 
-resource "aws_service_discovery_service" "rabbitmq" {
-  name = "rabbitmq"
+resource "aws_lb_target_group" "rabbitmq" {
+  name        = "${var.project_name}-tg-mq-${var.environment}"
+  port        = 5672
+  protocol    = "TCP"
+  vpc_id      = var.vpc_id
+  target_type = "ip"
 
-  dns_config {
-    namespace_id = aws_service_discovery_private_dns_namespace.lumina.id
-
-    dns_records {
-      ttl  = 10
-      type = "A"
-    }
-
-    routing_policy = "MULTIVALUE"
-  }
-
-  health_check_custom_config {
-    failure_threshold = 1
+  health_check {
+    protocol            = "TCP"
+    port                = "5672"
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    interval            = 10
   }
 
   tags = {
+    Name        = "${var.project_name}-tg-rabbitmq-${var.environment}"
     Project     = var.project_name
     Environment = var.environment
+  }
+}
+
+resource "aws_lb_listener" "rabbitmq" {
+  load_balancer_arn = aws_lb.rabbitmq.arn
+  port              = 5672
+  protocol          = "TCP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.rabbitmq.arn
   }
 }
 
@@ -173,7 +189,7 @@ resource "aws_ecs_task_definition" "rabbitmq" {
 }
 
 # ----------------------------------------------------------------------------
-# 6. ECS Service Fargate
+# 6. ECS Service Fargate integrado ao NLB
 # ----------------------------------------------------------------------------
 resource "aws_ecs_service" "rabbitmq" {
   name            = "${var.project_name}-svc-rabbitmq-${var.environment}"
@@ -188,8 +204,10 @@ resource "aws_ecs_service" "rabbitmq" {
     assign_public_ip = var.is_dev
   }
 
-  service_registries {
-    registry_arn = aws_service_discovery_service.rabbitmq.arn
+  load_balancer {
+    target_group_arn = aws_lb_target_group.rabbitmq.arn
+    container_name   = "rabbitmq"
+    container_port   = 5672
   }
 
   tags = {

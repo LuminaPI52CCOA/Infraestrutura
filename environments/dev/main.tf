@@ -55,7 +55,7 @@ module "rabbitmq" {
   environment   = "dev"
   is_dev        = true
   vpc_id        = module.network.vpc_id
-  subnet_ids    = [module.network.public_subnet_ids[0]]
+  subnet_ids    = module.network.public_subnet_ids
   backend_sg_id = module.network.sg_backend_id
   ecr_image_url = "${module.ecr.rabbitmq_repository_url}:latest"
 }

@@ -1,6 +1,6 @@
 output "endpoint" {
-  description = "DNS privado de Service Discovery do RabbitMQ acessivel internamente na VPC"
-  value       = "${aws_service_discovery_service.rabbitmq.name}.${aws_service_discovery_private_dns_namespace.lumina.name}"
+  description = "DNS do Network Load Balancer (NLB) interno do RabbitMQ acessivel internamente pelas instancias EC2 na VPC"
+  value       = aws_lb.rabbitmq.dns_name
 }
 
 output "port" {
