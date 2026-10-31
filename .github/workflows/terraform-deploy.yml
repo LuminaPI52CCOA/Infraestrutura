@@ -258,6 +258,15 @@ jobs:
           docker push ${{ steps.login-ecr.outputs.registry }}/lumina-database:latest
           cd ..
 
+      - name: Fase 2 - Tag e Push da Imagem RabbitMQ para o ECR
+        if: ${{ inputs.action == 'apply' }}
+        run: |
+          echo "Baixando imagem oficial do RabbitMQ 3.13 Management..."
+          docker pull rabbitmq:3.13-management-alpine
+          docker tag rabbitmq:3.13-management-alpine ${{ steps.login-ecr.outputs.registry }}/lumina-rabbitmq:latest
+          echo "Enviando imagem RabbitMQ ao ECR..."
+          docker push ${{ steps.login-ecr.outputs.registry }}/lumina-rabbitmq:latest
+
       - name: Fase 3 - Terraform Apply Completo (EC2s, ALBs, Storage e Telecom)
         if: ${{ inputs.action == 'apply' }}
         working-directory: ./environments/${{ inputs.environment }}
