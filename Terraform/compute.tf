@@ -127,6 +127,7 @@ resource "aws_instance" "frontend_a" {
                   server_name _;
                   root /var/www/html;
                   index index.html;
+                  client_max_body_size 55M;
 
                   # Roteamento SPA React
                   location / {
@@ -250,6 +251,7 @@ resource "aws_instance" "frontend_b" {
                   server_name _;
                   root /var/www/html;
                   index index.html;
+                  client_max_body_size 55M;
 
                   # Roteamento SPA React
                   location / {
@@ -390,7 +392,13 @@ resource "aws_instance" "backend_a" {
               aws.region=${var.aws_region}
               aws.s3.bucket-name=${local.s3_bucket_name}
 
+              # Upload de Arquivos / OCR Anamnese
+              spring.servlet.multipart.max-file-size=55MB
+              spring.servlet.multipart.max-request-size=55MB
+
               # Actuator Health Check
+              management.health.rabbit.enabled=false
+              spring.rabbitmq.listener.simple.auto-startup=false
               management.endpoints.web.exposure.include=*
               management.endpoint.health.show-details=always
               PROPS
@@ -409,7 +417,7 @@ resource "aws_instance" "backend_a" {
               Type=simple
               User=root
               WorkingDirectory=/opt/lumina-backend
-              ExecStart=/usr/bin/java -jar /opt/lumina-backend/target/backend-0.0.1-SNAPSHOT.jar
+              ExecStart=/usr/bin/java -Dmanagement.health.rabbit.enabled=false -Dspring.rabbitmq.listener.simple.auto-startup=false -jar /opt/lumina-backend/target/backend-0.0.1-SNAPSHOT.jar
               Restart=always
               RestartSec=10
               StandardOutput=journal
@@ -503,7 +511,13 @@ resource "aws_instance" "backend_b" {
               aws.region=${var.aws_region}
               aws.s3.bucket-name=${local.s3_bucket_name}
 
+              # Upload de Arquivos / OCR Anamnese
+              spring.servlet.multipart.max-file-size=55MB
+              spring.servlet.multipart.max-request-size=55MB
+
               # Actuator Health Check
+              management.health.rabbit.enabled=false
+              spring.rabbitmq.listener.simple.auto-startup=false
               management.endpoints.web.exposure.include=*
               management.endpoint.health.show-details=always
               PROPS
@@ -522,7 +536,7 @@ resource "aws_instance" "backend_b" {
               Type=simple
               User=root
               WorkingDirectory=/opt/lumina-backend
-              ExecStart=/usr/bin/java -jar /opt/lumina-backend/target/backend-0.0.1-SNAPSHOT.jar
+              ExecStart=/usr/bin/java -Dmanagement.health.rabbit.enabled=false -Dspring.rabbitmq.listener.simple.auto-startup=false -jar /opt/lumina-backend/target/backend-0.0.1-SNAPSHOT.jar
               Restart=always
               RestartSec=10
               StandardOutput=journal
@@ -565,14 +579,14 @@ resource "aws_instance" "database_a" {
               set -e
               export DEBIAN_FRONTEND=noninteractive
               apt-get update -y
-              apt-get install -y mariadb-server nginx
+              apt-get install -y mysql-server nginx
 
               # Remover site padrão do NGINX
               rm -f /etc/nginx/sites-enabled/default /etc/nginx/sites-available/default /etc/nginx/conf.d/default.conf
 
-              # Configuração MariaDB/MySQL
-              mkdir -p /etc/mysql/mariadb.conf.d
-              cat << 'MYCNF' > /etc/mysql/mariadb.conf.d/99-lumina.cnf
+              # Configuração MySQL
+              mkdir -p /etc/mysql/mysql.conf.d
+              cat << 'MYCNF' > /etc/mysql/mysql.conf.d/99-lumina.cnf
               [mysqld]
               bind-address = 0.0.0.0
               max_connections = 500
@@ -580,13 +594,14 @@ resource "aws_instance" "database_a" {
               collation-server = utf8mb4_unicode_ci
               MYCNF
 
-              systemctl restart mariadb
-              systemctl enable mariadb
+              systemctl restart mysql
+              systemctl enable mysql
 
               # Criação do banco de dados e concessão de privilégios para a VPC
               mysql -u root << 'EOSQL'
               CREATE DATABASE IF NOT EXISTS ${var.db_name} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
               CREATE USER IF NOT EXISTS '${var.db_user}'@'%' IDENTIFIED BY '${var.db_password}';
+              ALTER USER '${var.db_user}'@'%' IDENTIFIED BY '${var.db_password}';
               GRANT ALL PRIVILEGES ON ${var.db_name}.* TO '${var.db_user}'@'%';
               FLUSH PRIVILEGES;
               EOSQL
@@ -630,14 +645,14 @@ resource "aws_instance" "database_b" {
               set -e
               export DEBIAN_FRONTEND=noninteractive
               apt-get update -y
-              apt-get install -y mariadb-server nginx
+              apt-get install -y mysql-server nginx
 
               # Remover site padrão do NGINX
               rm -f /etc/nginx/sites-enabled/default /etc/nginx/sites-available/default /etc/nginx/conf.d/default.conf
 
-              # Configuração MariaDB/MySQL
-              mkdir -p /etc/mysql/mariadb.conf.d
-              cat << 'MYCNF' > /etc/mysql/mariadb.conf.d/99-lumina.cnf
+              # Configuração MySQL
+              mkdir -p /etc/mysql/mysql.conf.d
+              cat << 'MYCNF' > /etc/mysql/mysql.conf.d/99-lumina.cnf
               [mysqld]
               bind-address = 0.0.0.0
               max_connections = 500
@@ -645,13 +660,14 @@ resource "aws_instance" "database_b" {
               collation-server = utf8mb4_unicode_ci
               MYCNF
 
-              systemctl restart mariadb
-              systemctl enable mariadb
+              systemctl restart mysql
+              systemctl enable mysql
 
               # Criação do banco de dados e concessão de privilégios para a VPC
               mysql -u root << 'EOSQL'
               CREATE DATABASE IF NOT EXISTS ${var.db_name} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
               CREATE USER IF NOT EXISTS '${var.db_user}'@'%' IDENTIFIED BY '${var.db_password}';
+              ALTER USER '${var.db_user}'@'%' IDENTIFIED BY '${var.db_password}';
               GRANT ALL PRIVILEGES ON ${var.db_name}.* TO '${var.db_user}'@'%';
               FLUSH PRIVILEGES;
               EOSQL
