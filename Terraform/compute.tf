@@ -581,7 +581,7 @@ resource "aws_instance" "database_a" {
               set -e
               export DEBIAN_FRONTEND=noninteractive
               apt-get update -y
-              apt-get install -y mysql-server nginx
+              apt-get install -y git mysql-server nginx
 
               # Remover site padrão do NGINX
               rm -f /etc/nginx/sites-enabled/default /etc/nginx/sites-available/default /etc/nginx/conf.d/default.conf
@@ -607,6 +607,11 @@ resource "aws_instance" "database_a" {
               GRANT ALL PRIVILEGES ON ${var.db_name}.* TO '${var.db_user}'@'%';
               FLUSH PRIVILEGES;
               EOSQL
+
+              # Importacao automatica da massa de dados e schema do banco
+              rm -rf /tmp/lumina-db
+              git clone --depth 1 https://github.com/LuminaPI52CCOA/Banco-de-dados.git /tmp/lumina-db
+              mysql -u root ${var.db_name} < /tmp/lumina-db/lumina.sql || true
 
               # Configura NGINX para monitoramento local do status
               cat << 'CONF' > /etc/nginx/conf.d/db_status.conf
@@ -647,7 +652,7 @@ resource "aws_instance" "database_b" {
               set -e
               export DEBIAN_FRONTEND=noninteractive
               apt-get update -y
-              apt-get install -y mysql-server nginx
+              apt-get install -y git mysql-server nginx
 
               # Remover site padrão do NGINX
               rm -f /etc/nginx/sites-enabled/default /etc/nginx/sites-available/default /etc/nginx/conf.d/default.conf
@@ -673,6 +678,11 @@ resource "aws_instance" "database_b" {
               GRANT ALL PRIVILEGES ON ${var.db_name}.* TO '${var.db_user}'@'%';
               FLUSH PRIVILEGES;
               EOSQL
+
+              # Importacao automatica da massa de dados e schema do banco
+              rm -rf /tmp/lumina-db
+              git clone --depth 1 https://github.com/LuminaPI52CCOA/Banco-de-dados.git /tmp/lumina-db
+              mysql -u root ${var.db_name} < /tmp/lumina-db/lumina.sql || true
 
               # Configura NGINX para monitoramento local do status
               cat << 'CONF' > /etc/nginx/conf.d/db_status.conf
