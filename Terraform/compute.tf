@@ -142,6 +142,7 @@ resource "aws_instance" "frontend_a" {
                       proxy_set_header X-Real-IP $remote_addr;
                       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
                       proxy_set_header X-Forwarded-Proto $scheme;
+                      proxy_set_header Origin "";
                       proxy_connect_timeout 60s;
                       proxy_read_timeout 60s;
                   }
@@ -266,6 +267,7 @@ resource "aws_instance" "frontend_b" {
                       proxy_set_header X-Real-IP $remote_addr;
                       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
                       proxy_set_header X-Forwarded-Proto $scheme;
+                      proxy_set_header Origin "";
                       proxy_connect_timeout 60s;
                       proxy_read_timeout 60s;
                   }
