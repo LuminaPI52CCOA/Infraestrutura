@@ -225,3 +225,23 @@ module "data_pipeline" {
   script_bucket_id   = module.s3_athena_results.bucket_id
   enable_s3_trigger  = true
 }
+
+# ==============================================================================
+# Modulo Serverless Backup Automatizado do Banco de Dados (Exclusivo Prod)
+# ==============================================================================
+
+module "backup" {
+  source             = "../../../Lambda-Backup/terraform"
+  project_name       = var.project_name
+  environment        = "prod"
+  vpc_id             = module.network.vpc_id
+  subnet_ids         = module.network.private_app_subnet_ids
+  db_sg_id           = module.network.sg_database_id
+  db_host            = module.database.primary_private_ip
+  db_name            = var.db_name
+  db_user            = var.db_user
+  db_password        = var.db_password
+  admin_email        = var.admin_notification_email
+  backup_bucket_name = "lumina-sptech-backup-prod"
+}
+
