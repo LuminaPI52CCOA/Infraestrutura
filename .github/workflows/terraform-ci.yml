@@ -38,6 +38,13 @@ jobs:
           ref: 'main'
           path: 'Data-Pipeline'
 
+      - name: Checkout do Modulo Lambda-Backup
+        uses: actions/checkout@v4
+        with:
+          repository: 'LuminaPI52CCOA/Lambda-Backup'
+          ref: 'main'
+          path: 'Lambda-Backup'
+
       - name: Configurar estrutura de pastas multi-repo
         run: |
           mkdir -p ../../../Lambda-Alexa
@@ -52,6 +59,12 @@ jobs:
           cp -r Data-Pipeline/* ../../Data-Pipeline/ 2>/dev/null || true
           mkdir -p ../Data-Pipeline
           cp -r Data-Pipeline/* ../Data-Pipeline/ 2>/dev/null || true
+          mkdir -p ../../../Lambda-Backup
+          cp -r Lambda-Backup/* ../../../Lambda-Backup/ 2>/dev/null || true
+          mkdir -p ../../Lambda-Backup
+          cp -r Lambda-Backup/* ../../Lambda-Backup/ 2>/dev/null || true
+          mkdir -p ../Lambda-Backup
+          cp -r Lambda-Backup/* ../Lambda-Backup/ 2>/dev/null || true
 
       - name: Instalar Terraform
         uses: hashicorp/setup-terraform@v3
