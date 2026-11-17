@@ -87,6 +87,7 @@ module "backend" {
   ecr_image_url           = "${module.ecr.backend_repository_url}:latest"
   rabbitmq_host           = module.rabbitmq.endpoint
   rabbitmq_port           = module.rabbitmq.port
+  redis_password          = var.redis_password
   app_public_url          = "http://${module.network.alb_public_dns}"
 }
 

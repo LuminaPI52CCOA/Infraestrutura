@@ -180,6 +180,16 @@ resource "aws_security_group_rule" "backend_ssh_from_bastion" {
   description              = "SSH a partir do Bastion"
 }
 
+resource "aws_security_group_rule" "backend_redis_entre_backends" {
+  type                     = "ingress"
+  from_port                = 6379
+  to_port                  = 6379
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.backend.id
+  security_group_id        = aws_security_group.backend.id
+  description              = "Redis (cache) acessivel somente pelas instancias de backend"
+}
+
 resource "aws_security_group_rule" "backend_from_alb_internal" {
   count                    = var.enable_internal_alb ? 1 : 0
   type                     = "ingress"

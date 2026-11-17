@@ -19,6 +19,19 @@ data "aws_iam_instance_profile" "lab_profile" {
   name = var.lab_instance_profile_name
 }
 
+# Redis (cache da agenda): um unico Redis, no container da PRIMEIRA instancia de backend,
+# compartilhado por todas. Como as instancias nascem do mesmo recurso com count, a segunda nao
+# pode referenciar o IP da primeira (ciclo); por isso a primeira recebe um IP privado fixo,
+# calculado a partir do CIDR da sub-rede, e todas apontam para ele.
+data "aws_subnet" "redis" {
+  count = var.redis_enabled ? 1 : 0
+  id    = var.subnet_ids[0]
+}
+
+locals {
+  redis_host = var.redis_enabled ? cidrhost(data.aws_subnet.redis[0].cidr_block, var.redis_host_number) : "localhost"
+}
+
 locals {
   backend_image = var.ecr_image_url != "" ? var.ecr_image_url : "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/lumina-backend:latest"
 }
@@ -28,6 +41,7 @@ resource "aws_instance" "backend" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
   subnet_id              = var.subnet_ids[count.index % length(var.subnet_ids)]
+  private_ip             = var.redis_enabled && count.index == 0 ? local.redis_host : null
   vpc_security_group_ids = var.security_group_ids
   iam_instance_profile   = data.aws_iam_instance_profile.lab_profile.name
   key_name               = var.key_name != "" ? var.key_name : null
@@ -79,8 +93,18 @@ resource "aws_instance" "backend" {
               SPRING_RABBITMQ_USERNAME=${var.rabbitmq_username}
               SPRING_RABBITMQ_PASSWORD=${var.rabbitmq_password}
               APP_PUBLIC_URL=${var.app_public_url}
+              LUMINA_CACHE_AGENDA_ENABLED=${var.redis_enabled}
+              SPRING_DATA_REDIS_HOST=${local.redis_host}
+              SPRING_DATA_REDIS_PORT=6379
+              SPRING_DATA_REDIS_PASSWORD=${var.redis_password}
               ENV
               chmod 600 /opt/lumina-backend/.env
+
+              # Senha do Redis em arquivo proprio: o container do Redis nao precisa dos segredos do backend
+              cat << 'REDISENV' > /opt/lumina-backend/redis.env
+              REDIS_PASSWORD=${var.redis_password}
+              REDISENV
+              chmod 600 /opt/lumina-backend/redis.env
 
               # 3. Configuracao do Fluent Bit (fluent-bit.conf e parsers.conf)
               cat << 'FBCONF' > /opt/lumina-backend/fluent-bit.conf
@@ -207,6 +231,19 @@ resource "aws_instance" "backend" {
                     - /var/lib/docker/containers:/var/lib/docker/containers:ro
                     - /var/run/docker.sock:/var/run/docker.sock:ro
 
+              %{if var.redis_enabled && count.index == 0}
+                # Cache compartilhado pelas instancias de backend. So cache: sem persistencia em disco.
+                redis:
+                  image: redis:7-alpine
+                  container_name: lumina-redis
+                  restart: unless-stopped
+                  env_file: redis.env
+                  command: sh -c 'exec redis-server --requirepass "$$REDIS_PASSWORD" --maxmemory ${var.redis_maxmemory} --maxmemory-policy allkeys-lru --save "" --appendonly no'
+                  ports:
+                    - "6379:6379"
+                  labels:
+                    - com.centurylinklabs.watchtower.enable=false
+              %{endif}
                 watchtower:
                   image: containrrr/watchtower:latest
                   container_name: lumina-watchtower
