@@ -22,3 +22,8 @@ output "primary_public_ip" {
   description = "IP publico da instancia principal de backend (em dev)"
   value       = var.is_dev ? aws_instance.backend[0].public_ip : ""
 }
+
+output "redis_host" {
+  description = "IP privado do Redis compartilhado (primeira instancia de backend); vazio se desabilitado"
+  value       = var.redis_enabled ? local.redis_host : ""
+}

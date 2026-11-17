@@ -186,3 +186,28 @@ variable "app_public_url" {
   type        = string
   default     = "http://localhost:5173"
 }
+
+variable "redis_enabled" {
+  description = "Sobe um Redis (cache da agenda) na primeira instancia de backend e aponta todas para ele"
+  type        = bool
+  default     = true
+}
+
+variable "redis_password" {
+  description = "Senha do Redis (use apenas letras e numeros)"
+  type        = string
+  sensitive   = true
+  default     = "CHANGE_ME_REDIS_PASSWORD"
+}
+
+variable "redis_host_number" {
+  description = "Posicao, dentro do CIDR da primeira sub-rede, do IP privado fixo da instancia que hospeda o Redis"
+  type        = number
+  default     = 250
+}
+
+variable "redis_maxmemory" {
+  description = "Limite de memoria do Redis; ao atingir, as chaves menos usadas sao descartadas"
+  type        = string
+  default     = "128mb"
+}

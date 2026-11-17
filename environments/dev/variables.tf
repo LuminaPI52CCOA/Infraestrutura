@@ -79,6 +79,13 @@ variable "gemini_api_key" {
   default     = "CHANGE_ME_GEMINI_KEY"
 }
 
+variable "redis_password" {
+  description = "Senha do Redis de cache que roda na primeira instancia de backend (use apenas letras e numeros)"
+  type        = string
+  sensitive   = true
+  default     = "CHANGE_ME_REDIS_PASSWORD"
+}
+
 variable "backend_repo_url" {
   description = "URL do repositorio Git do Backend"
   type        = string
