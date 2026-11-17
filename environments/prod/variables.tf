@@ -169,6 +169,6 @@ variable "alexa_reminders_enabled" {
 variable "admin_notification_email" {
   description = "E-mail do administrador do sistema para notificacoes de backup via SNS"
   type        = string
-  default     = "grupo5pi-2ccoa@outlook.com"
+  default     = "grupo5pi-2ccoa@sptech.school"
 }
 
